@@ -9,7 +9,6 @@
 </head>
 <body class="min-h-screen text-white">
 
-  <!-- CLEAR WORKSPACE MODAL -->
   <div id="clear-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
     <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="closeClearModal()"></div>
     <div class="relative bg-gray-900 border border-red-800 border-opacity-60 rounded-2xl p-6 w-full max-w-md shadow-2xl">
@@ -35,7 +34,6 @@
     </div>
   </div>
 
-  <!-- HEADER -->
   <header class="border-b border-gray-800 bg-gray-950 bg-opacity-80 backdrop-blur sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -63,13 +61,11 @@
 
   <main class="max-w-6xl mx-auto px-6 py-8 space-y-0">
 
-    <!-- TAB BAR -->
     <div class="flex items-end gap-1 border-b border-gray-800">
       <button id="tab-prisma-btn"   class="tab-btn active-prisma" onclick="switchTab('prisma')">📐 Prisma</button>
       <button id="tab-invoices-btn" class="tab-btn inactive"      onclick="switchTab('invoices')">🧾 Invoices</button>
     </div>
 
-    <!-- PRISMA TAB -->
     <div id="tab-prisma" class="tab-panel active pt-8 space-y-6">
       <div class="card-prisma rounded-2xl p-8 flex flex-col gap-6 max-w-2xl mx-auto">
         <div class="flex items-center gap-4">
@@ -106,10 +102,8 @@
       </div>
     </div>
 
-    <!-- INVOICES TAB -->
     <div id="tab-invoices" class="tab-panel pt-8 space-y-8">
 
-      <!-- STATUS BAR -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
           <p class="text-2xl font-black text-white" id="stat-pdfs">—</p>
@@ -133,7 +127,6 @@
         </div>
       </div>
 
-      <!-- MASTER TRACKER NOTICE -->
       <div class="bg-gray-900 border border-indigo-800 border-opacity-50 rounded-2xl p-5 flex items-start gap-4">
         <div class="w-9 h-9 rounded-xl bg-indigo-500 bg-opacity-10 flex items-center justify-center text-lg flex-shrink-0">📂</div>
         <div class="flex-1">
@@ -153,7 +146,6 @@
         </div>
       </div>
 
-      <!-- CLEAR WORKSPACE BANNER -->
       <div class="bg-gray-900 border border-red-900 border-opacity-50 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-start gap-3">
           <div class="w-9 h-9 rounded-xl bg-red-500 bg-opacity-10 flex items-center justify-center text-lg flex-shrink-0">🗑️</div>
@@ -172,12 +164,8 @@
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════════ -->
-      <!-- INVOICE MODULE CARD                                    -->
-      <!-- ══════════════════════════════════════════════════════ -->
       <div class="card-invoice rounded-2xl p-6 flex flex-col gap-5">
 
-        <!-- Card Header -->
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-2xl bg-white bg-opacity-10 flex items-center justify-center text-2xl">🧾</div>
           <div>
@@ -186,7 +174,6 @@
           </div>
         </div>
 
-        <!-- Top Bubbles -->
         <div class="grid grid-cols-3 gap-2">
           <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
             <p class="text-xl font-black">4</p><p class="text-xs text-gray-400 mt-0.5">Suppliers</p>
@@ -200,83 +187,59 @@
           </div>
         </div>
 
-        <!-- ── EXTRACTION SUMMARY ── -->
-        <div id="extraction-summary" class="space-y-3">
+        <div class="space-y-3">
           <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">Extraction Summary</p>
 
-          <!-- Empty state -->
           <div id="summary-empty" class="bg-black bg-opacity-20 rounded-xl px-4 py-6 text-center">
             <p class="text-2xl mb-2">📭</p>
             <p class="text-sm text-gray-500 font-semibold">No data yet</p>
             <p class="text-xs text-gray-600 mt-1">Run the workflow to see extraction results here</p>
           </div>
 
-          <!-- Populated state (hidden until data exists) -->
           <div id="summary-data" class="hidden space-y-3">
 
-            <!-- Total + Clients row -->
-            <div class="grid grid-cols-2 gap-2">
-              <div class="bg-black bg-opacity-20 rounded-xl p-3 text-center">
-                <p class="text-2xl font-black text-sky-400" id="sum-total-invoices">0</p>
-                <p class="text-xs text-gray-400 mt-0.5">Total Invoices Sorted</p>
-              </div>
-              <div class="bg-black bg-opacity-20 rounded-xl p-3 text-center">
-                <p class="text-2xl font-black text-indigo-400" id="sum-total-clients">0</p>
-                <p class="text-xs text-gray-400 mt-0.5">Client Folders Created</p>
-              </div>
+            <div class="bg-black bg-opacity-20 rounded-xl p-4">
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Total Amount by Currency</p>
+              <div id="currency-totals-grid" class="grid grid-cols-2 gap-2"></div>
             </div>
 
-            <!-- Supplier Breakdown -->
             <div class="bg-black bg-opacity-20 rounded-xl p-4">
-              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">By Supplier</p>
-              <div class="space-y-2" id="supplier-bars">
-                <!-- Meta -->
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">By Supplier (Number of Invoices)</p>
+              <div class="space-y-2">
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-gray-400 w-20 flex-shrink-0">Meta</span>
                   <div class="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
                     <div id="bar-meta" class="h-2 rounded-full bg-blue-500 transition-all duration-700" style="width:0%"></div>
                   </div>
-                  <span id="count-meta" class="text-xs font-bold text-white w-6 text-right">0</span>
+                  <span id="count-meta" class="text-xs font-bold text-white w-12 text-right">0</span>
                 </div>
-                <!-- Google -->
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-gray-400 w-20 flex-shrink-0">Google</span>
                   <div class="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
                     <div id="bar-google" class="h-2 rounded-full bg-green-500 transition-all duration-700" style="width:0%"></div>
                   </div>
-                  <span id="count-google" class="text-xs font-bold text-white w-6 text-right">0</span>
+                  <span id="count-google" class="text-xs font-bold text-white w-12 text-right">0</span>
                 </div>
-                <!-- Apple -->
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-gray-400 w-20 flex-shrink-0">Apple</span>
                   <div class="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
                     <div id="bar-apple" class="h-2 rounded-full bg-gray-300 transition-all duration-700" style="width:0%"></div>
                   </div>
-                  <span id="count-apple" class="text-xs font-bold text-white w-6 text-right">0</span>
+                  <span id="count-apple" class="text-xs font-bold text-white w-12 text-right">0</span>
                 </div>
-                <!-- AdsJoy -->
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-gray-400 w-20 flex-shrink-0">AdsJoy</span>
                   <div class="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
                     <div id="bar-adsjoy" class="h-2 rounded-full bg-orange-400 transition-all duration-700" style="width:0%"></div>
                   </div>
-                  <span id="count-adsjoy" class="text-xs font-bold text-white w-6 text-right">0</span>
+                  <span id="count-adsjoy" class="text-xs font-bold text-white w-12 text-right">0</span>
                 </div>
-              </div>
-            </div>
-
-            <!-- Client Breakdown chips -->
-            <div class="bg-black bg-opacity-20 rounded-xl p-4">
-              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">By Client</p>
-              <div id="client-chips" class="flex flex-wrap gap-2">
-                <!-- populated by JS -->
               </div>
             </div>
 
           </div>
         </div>
 
-        <!-- Action Buttons -->
         <div class="grid grid-cols-2 gap-2">
           <button id="btn-workflow" onclick="runStream('workflow')" class="btn-action col-span-2 py-3 rounded-xl bg-sky-600 text-white font-bold text-sm">▶ Run Full Workflow</button>
           <button id="btn-extract" onclick="runStream('extract')" class="btn-action py-2.5 rounded-xl bg-gray-700 text-white font-semibold text-xs">Extract Only</button>
@@ -284,7 +247,6 @@
         </div>
       </div>
 
-      <!-- PDF DROP ZONE -->
       <div id="drop-zone" class="rounded-2xl p-8 text-center cursor-pointer bg-gray-900"
         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
         onclick="document.getElementById('file-input').click()">
@@ -295,7 +257,6 @@
         <div id="upload-status" class="mt-3 text-xs text-sky-400 hidden"></div>
       </div>
 
-      <!-- TERMINAL -->
       <div>
         <div class="flex items-center justify-between px-5 py-3 bg-gray-900 border border-gray-800 rounded-t-2xl border-b-0">
           <div class="flex items-center gap-2">
@@ -309,13 +270,8 @@
         <div id="log-terminal"><span class="log-dim">$ waiting for command…</span></div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════════ -->
-      <!-- PIPELINE BANNER — with Live status badges             -->
-      <!-- ══════════════════════════════════════════════════════ -->
       <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
         <p class="text-xs font-bold tracking-widest text-gray-600 uppercase mb-4">End-to-End Pipeline</p>
-
-        <!-- Step flow -->
         <div class="flex items-center gap-2 flex-wrap mb-5">
           <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📥 Drop PDFs</div>
           <span class="text-gray-700 font-bold">→</span>
@@ -329,8 +285,6 @@
           <span class="text-gray-700 font-bold">→</span>
           <div id="pipe-drive" class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-900 text-yellow-300 border border-yellow-700 border-opacity-50">☁️ Drive Sync</div>
         </div>
-
-        <!-- Feature status table -->
         <div class="border-t border-gray-800 pt-4 space-y-0">
           <p class="text-xs font-bold text-gray-600 uppercase tracking-widest mb-3">Feature Status</p>
           <div class="flex items-center justify-between py-2 border-b border-gray-800">
@@ -356,14 +310,12 @@
         </div>
       </div>
 
-      <!-- DOWNLOADS CARD -->
       <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
         <div class="flex items-center gap-3 mb-5">
           <div class="w-10 h-10 rounded-xl bg-indigo-500 bg-opacity-10 flex items-center justify-center text-xl flex-shrink-0">⬇️</div>
           <div><h3 class="font-bold text-white">Downloads</h3><p class="text-xs text-gray-400">Export sorted files and updated tracker to your computer</p></div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- Clients ZIP -->
           <div class="bg-gray-800 rounded-xl p-4 flex flex-col gap-3">
             <div class="flex items-center gap-2">
               <span class="text-lg">📁</span>
@@ -395,7 +347,6 @@
             <button id="btn-download-clients" onclick="downloadClientsZip()" class="btn-action w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs">⬇ Download Clients.zip</button>
             <div id="clients-zip-dl-status" class="text-xs hidden"></div>
           </div>
-          <!-- Master Tracker -->
           <div class="bg-gray-800 rounded-xl p-4 flex flex-col gap-3">
             <div class="flex items-center gap-2">
               <span class="text-lg">📊</span>
@@ -419,7 +370,6 @@
         </div>
       </div>
 
-      <!-- GOOGLE DRIVE SYNC CARD -->
       <div id="drive-card" class="bg-gray-900 border border-yellow-800 border-opacity-40 rounded-2xl p-6">
         <div class="flex items-start gap-4">
           <div class="w-10 h-10 rounded-xl bg-yellow-500 bg-opacity-10 flex items-center justify-center text-xl flex-shrink-0">☁️</div>
@@ -444,7 +394,6 @@
               </div>
             </div>
             <p class="text-xs text-gray-400 mb-5">Mirrors your <code class="text-gray-300">Clients/</code> folder to Google Drive. Skips files already uploaded.</p>
-            <!-- NOT CONNECTED STATE -->
             <div id="drive-not-connected">
               <div class="mb-5">
                 <div class="flex items-center gap-2 mb-3">
@@ -481,7 +430,6 @@
                 </div>
               </div>
             </div>
-            <!-- CONNECTED STATE -->
             <div id="drive-connected" class="hidden space-y-4">
               <div class="flex items-center gap-3 bg-green-500 bg-opacity-10 border border-green-500 border-opacity-30 rounded-xl px-4 py-3">
                 <div class="pulse-dot bg-green-400 flex-shrink-0"></div>

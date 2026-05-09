@@ -22,52 +22,74 @@ function triggerBlobDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-// ─────────────────────────────────────────────
-// EXTRACTION SUMMARY
-// ─────────────────────────────────────────────
-function updateExtractionSummary(d) {
-  const counts  = d.supplier_counts || {};
-  const clients = d.client_list     || [];
-  const total   = Object.values(counts).reduce((a, b) => a + b, 0);
-  const hasData = total > 0 || clients.length > 0;
+const CURRENCY_STYLE = {
+  SGD: { label: 'SGD', color: 'text-blue-400',   bg: 'bg-blue-500'   },
+  IDR: { label: 'IDR', color: 'text-green-400',  bg: 'bg-green-500'  },
+  MYR: { label: 'MYR', color: 'text-yellow-400', bg: 'bg-yellow-500' },
+  USD: { label: 'USD', color: 'text-purple-400', bg: 'bg-purple-500' },
+};
 
-  const emptyEl = document.getElementById('summary-empty');
-  const dataEl  = document.getElementById('summary-data');
-  if (!emptyEl || !dataEl) return;
-
-  emptyEl.classList.toggle('hidden', hasData);
-  dataEl.classList.toggle('hidden', !hasData);
-
-  if (!hasData) return;
-
-  document.getElementById('sum-total-invoices').textContent = total;
-  document.getElementById('sum-total-clients').textContent  = clients.length;
-
-  // Supplier bars
-  const max = Math.max(...Object.values(counts), 1);
-  ['meta', 'google', 'apple', 'adsjoy'].forEach(s => {
-    const key   = s === 'adsjoy' ? 'AdsJoy' : s.charAt(0).toUpperCase() + s.slice(1);
-    const count = counts[key] || 0;
-    const countEl = document.getElementById('count-' + s);
-    const barEl   = document.getElementById('bar-' + s);
-    if (countEl) countEl.textContent  = count;
-    if (barEl)   barEl.style.width    = (count / max * 100) + '%';
-  });
-
-  // Client chips
-  const chips = document.getElementById('client-chips');
-  if (chips) {
-    chips.innerHTML = clients.length
-      ? clients.map(c =>
-          `<span class="text-xs bg-gray-700 text-sky-300 px-2.5 py-1 rounded-lg font-semibold">${c}</span>`
-        ).join('')
-      : '<span class="text-xs text-gray-600">No client folders yet</span>';
-  }
+function formatAmount(num) {
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(2) + 'M';
+  if (num >= 1_000)     return (num / 1_000).toFixed(1) + 'K';
+  return num.toFixed(2);
 }
 
-// ─────────────────────────────────────────────
-// STATUS REFRESH
-// ─────────────────────────────────────────────
+let _lastSupplierCounts = {};
+
+async function refreshSummary() {
+  try {
+    const res  = await fetch('/api/summary');
+    const data = await res.json();
+
+    const emptyEl = document.getElementById('summary-empty');
+    const dataEl  = document.getElementById('summary-data');
+    if (!emptyEl || !dataEl) return;
+
+    if (!data.has_data) {
+      emptyEl.classList.remove('hidden');
+      dataEl.classList.add('hidden');
+      return;
+    }
+
+    emptyEl.classList.add('hidden');
+    dataEl.classList.remove('hidden');
+
+    const grid = document.getElementById('currency-totals-grid');
+    if (grid) {
+      const currencies = Object.keys(data.currency_totals).sort();
+      grid.innerHTML = currencies.map(cur => {
+        const amount = data.currency_totals[cur];
+        const style  = CURRENCY_STYLE[cur] || { label: cur, color: 'text-gray-300', bg: 'bg-gray-500' };
+        return `
+          <div class="bg-gray-900 rounded-xl p-3 flex flex-col gap-1">
+            <div class="flex items-center gap-1.5">
+              <div class="w-2 h-2 rounded-full ${style.bg} bg-opacity-80 flex-shrink-0"></div>
+              <span class="text-xs font-bold text-gray-400">${style.label}</span>
+            </div>
+            <p class="text-lg font-black ${style.color} leading-tight">${formatAmount(amount)}</p>
+            <p class="text-xs text-gray-600 font-mono">${amount.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>`;
+      }).join('');
+    }
+
+    renderSupplierBars(_lastSupplierCounts);
+
+  } catch (e) {}
+}
+
+function renderSupplierBars(counts) {
+  const max    = Math.max(...Object.values(counts), 1);
+  const keyMap = { Meta: 'meta', Google: 'google', Apple: 'apple', AdsJoy: 'adsjoy' };
+  Object.entries(keyMap).forEach(([label, id]) => {
+    const count = counts[label] || 0;
+    const barEl = document.getElementById('bar-' + id);
+    const cntEl = document.getElementById('count-' + id);
+    if (barEl) barEl.style.width = (count / max * 100) + '%';
+    if (cntEl) cntEl.textContent = count;
+  });
+}
+
 async function refreshStatus() {
   try {
     const res = await fetch('/api/status');
@@ -78,12 +100,10 @@ async function refreshStatus() {
     document.getElementById('bubble-pdfs').textContent       = d.pdf_count      ?? '—';
     document.getElementById('clients-zip-count').textContent = d.client_folders ?? '—';
 
-    // Master Tracker stat
     const tracker = document.getElementById('stat-tracker');
     tracker.textContent = d.tracker_exists ? '✅ Found' : '❌ Missing';
     tracker.className   = 'text-sm font-bold ' + (d.tracker_exists ? 'text-green-400' : 'text-red-400');
 
-    // Sort Report stat
     const report   = document.getElementById('stat-report');
     const dlBtn    = document.getElementById('btn-download-report');
     const reportNA = document.getElementById('report-na');
@@ -99,7 +119,6 @@ async function refreshStatus() {
       reportNA.classList.remove('hidden');
     }
 
-    // Download card — Tracker button state
     const trackerStatusEl = document.getElementById('tracker-dl-status-text');
     const btnTracker      = document.getElementById('btn-download-tracker');
     const btnClients      = document.getElementById('btn-download-clients');
@@ -116,7 +135,6 @@ async function refreshStatus() {
       btnTracker.className = 'btn-action w-full py-2.5 rounded-lg bg-gray-700 text-gray-500 font-bold text-xs';
     }
 
-    // Download card — Clients ZIP button state
     if ((d.client_folders ?? 0) === 0) {
       btnClients.disabled  = true;
       btnClients.className = 'btn-action w-full py-2.5 rounded-lg bg-gray-700 text-gray-500 font-bold text-xs';
@@ -125,10 +143,9 @@ async function refreshStatus() {
       btnClients.className = 'btn-action w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs';
     }
 
-    // Extraction summary (new)
-    updateExtractionSummary(d);
+    _lastSupplierCounts = d.supplier_counts || {};
+    refreshSummary();
 
-    // Drive UI
     const fullyConnected = d.creds_exists && d.folder_id_set;
     updateDriveUI(fullyConnected, d.creds_exists, d.folder_id_set);
 
@@ -143,9 +160,6 @@ async function refreshStatus() {
 refreshStatus();
 setInterval(refreshStatus, 8000);
 
-// ─────────────────────────────────────────────
-// DRIVE UI
-// ─────────────────────────────────────────────
 function updateDriveUI(fullyConnected, credsExists, folderSet) {
   document.getElementById('drive-badge-connected').classList.toggle('hidden', !fullyConnected);
   document.getElementById('drive-badge-connected').classList.toggle('flex',    fullyConnected);
@@ -170,12 +184,10 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
     badge.textContent = 'Not Connected';
   }
 
-  const mini  = document.getElementById('drive-mini-badge');
-  const label = document.getElementById('drive-mini-label');
-  const feat  = document.getElementById('drive-feature-badge');
-  const pipe  = document.getElementById('pipe-drive');
-
-  // Pipeline feature status table badge (new)
+  const mini      = document.getElementById('drive-mini-badge');
+  const label     = document.getElementById('drive-mini-label');
+  const feat      = document.getElementById('drive-feature-badge');
+  const pipe      = document.getElementById('pipe-drive');
   const pipeBadge = document.getElementById('pipe-drive-badge');
 
   if (fullyConnected) {
@@ -217,9 +229,6 @@ async function loadFolderIDDisplay() {
   } catch (e) {}
 }
 
-// ─────────────────────────────────────────────
-// FOLDER ID — Save / Update / Toggle Edit
-// ─────────────────────────────────────────────
 async function saveFolderID() {
   const input  = document.getElementById('folder-id-input');
   const id     = input.value.trim();
@@ -304,9 +313,6 @@ function onCredsDrop(e) {
   if (e.dataTransfer.files.length > 0) uploadCredentials(e.dataTransfer.files[0]);
 }
 
-// ─────────────────────────────────────────────
-// TERMINAL
-// ─────────────────────────────────────────────
 const terminal = document.getElementById('log-terminal');
 
 function logLine(text, cls = 'log-ok') {
@@ -329,9 +335,6 @@ function classifyLine(line) {
   return 'log-info';
 }
 
-// ─────────────────────────────────────────────
-// WORKFLOW RUNNERS
-// ─────────────────────────────────────────────
 const BTN_IDS = { workflow: 'btn-workflow', extract: 'btn-extract', sort: 'btn-sort' };
 
 async function runStream(type) {
@@ -384,9 +387,6 @@ async function runDriveSync() {
   finally { btn.disabled = false; btn.innerHTML = origHTML; refreshStatus(); }
 }
 
-// ─────────────────────────────────────────────
-// PDF DROP ZONE
-// ─────────────────────────────────────────────
 function onDragOver(e)  { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
 function onDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
 function onDrop(e) {
@@ -409,9 +409,6 @@ async function uploadFiles(files) {
   } catch (e) { showStatus(status, '[ERR] Upload failed: ' + e.message, 'text-red-400', 0); }
 }
 
-// ─────────────────────────────────────────────
-// CLEAR WORKSPACE — Modal
-// ─────────────────────────────────────────────
 function openClearModal() {
   const modal  = document.getElementById('clear-modal');
   const status = document.getElementById('clear-modal-status');
@@ -462,9 +459,6 @@ async function confirmClearWorkspace() {
   }
 }
 
-// ─────────────────────────────────────────────
-// UPLOADS & DOWNLOADS
-// ─────────────────────────────────────────────
 async function uploadTracker(file) {
   if (!file) return;
   const el = document.getElementById('tracker-upload-status');

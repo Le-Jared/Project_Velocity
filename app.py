@@ -128,6 +128,80 @@ def status():
     })
 
 
+@app.route("/api/summary")
+def summary():
+    tracker_path = (
+        TRACKER_OUTPUT if os.path.exists(TRACKER_OUTPUT) else
+        TRACKER_INPUT  if os.path.exists(TRACKER_INPUT)  else None
+    )
+    if not tracker_path:
+        return jsonify({"currency_totals": {}, "supplier_totals": {}, "has_data": False})
+
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(tracker_path, read_only=True, data_only=True)
+
+        currency_totals = {}
+        supplier_totals = {}
+
+        sheet_map = {
+            "Adsjoy":          "AdsJoy",
+            "Apple (ASA)":     "Apple",
+            "Google":          "Google",
+            "Meta (facebook)": "Meta",
+        }
+
+        for sheet_name, supplier_label in sheet_map.items():
+            if sheet_name not in wb.sheetnames:
+                continue
+
+            ws      = wb[sheet_name]
+            headers = [
+                str(c.value).strip() if c.value else ""
+                for c in next(ws.iter_rows(min_row=1, max_row=1))
+            ]
+
+            cur_idx = next(
+                (i for i, h in enumerate(headers) if h.strip() in ("Currency", "Currency ")),
+                None
+            )
+            amt_idx = next(
+                (i for i, h in enumerate(headers) if h.strip() == "Amount"),
+                None
+            )
+
+            if cur_idx is None or amt_idx is None:
+                continue
+
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                cur = str(row[cur_idx]).strip() if row[cur_idx] else ""
+                amt = row[amt_idx]
+                if not cur or cur == "None" or amt is None:
+                    continue
+                try:
+                    amt = float(amt)
+                except (ValueError, TypeError):
+                    continue
+                currency_totals[cur]            = currency_totals.get(cur, 0.0) + amt
+                supplier_totals[supplier_label] = supplier_totals.get(supplier_label, 0.0) + amt
+
+        wb.close()
+
+        return jsonify({
+            "currency_totals": currency_totals,
+            "supplier_totals": supplier_totals,
+            "has_data":        bool(currency_totals),
+        })
+
+    except Exception as e:
+        return jsonify({
+            "currency_totals": {},
+            "supplier_totals": {},
+            "has_data":        False,
+            "error":           str(e),
+        })
+
+
 @app.route("/api/upload", methods=["POST"])
 def upload():
     if "files" not in request.files:
