@@ -1,17 +1,3 @@
-"""
-ACCT-108 | Invoice Data Extractor → Master Tracker  v4.1
-=========================================================
-Supports : AdsJoy · Apple (ASA) · Google · Meta (Facebook)
-
-Usage
------
-1. Place this script in your project folder
-2. Drop ALL invoice PDFs into ./invoices/
-   (subfolders like sgd/ usd/ myr/ are scanned automatically)
-3. Confirm TRACKER_PATH and OUTPUT_PATH below
-4. Run:  python invoice_extractor.py
-"""
-
 import os
 import re
 import warnings
@@ -24,7 +10,7 @@ from openpyxl.utils import get_column_letter
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────────────────────
-# ⚙️  CONFIG
+# CONFIG
 # ─────────────────────────────────────────────────────────────
 TRACKER_PATH   = "ACCT-108 Master Invoice Tracker 2026.xlsx"
 INVOICE_FOLDER = "./invoices"

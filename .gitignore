@@ -1,5 +1,6 @@
 # Invoice PDFs
 invoices/
+Clients/
 
 # Output tracker (contains financial data)
 *Updated*.xlsx
