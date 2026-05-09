@@ -1,23 +1,28 @@
 import os
 import re
 import csv
+import sys
 import shutil
 import warnings
 import pdfplumber
 
+# Windows CP1252 fix - force UTF-8 output
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # CONFIG
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 INVOICE_FOLDER = "./invoices"
 OUTPUT_ROOT    = "./Clients"
-REPORT_PATH    = "invoice_sort_report.csv"
+OUTPUT_FOLDER  = "./Output"
+REPORT_PATH    = os.path.join(OUTPUT_FOLDER, "invoice_sort_report.csv")
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # MAPPINGS
-# ─────────────────────────────────────────────────────────────
-
+# -----------------------------------------------------------------
 CURRENCY_MARKET = {
     "MYR": "MY", "SGD": "SG", "IDR": "ID",
     "PHP": "PH", "USD": "USD", "GBP": "GB", "AUD": "AU",
@@ -30,11 +35,9 @@ MONTH_NAMES = {
     "Oct": "October",  "Nov": "November",  "Dec": "December",
 }
 
-# Meta Ad Account ID → Client code
 META_ACCOUNT_CLIENT = {
     "10472231667355": "BHC",
     "10572631630900": "LGL",
-    # add more: "account_id": "CLIENT_CODE"
 }
 
 SUPPLIER_NAMES = {
@@ -42,18 +45,10 @@ SUPPLIER_NAMES = {
     "apple": "Apple", "adsjoy": "AdsJoy",
 }
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # HELPERS
-# ─────────────────────────────────────────────────────────────
-
+# -----------------------------------------------------------------
 def detect_supplier(filename):
-    """
-    Order matters:
-    1. AdsJoy  — filename contains ADSJOY
-    2. Apple   — filename starts with Q + digits
-    3. Meta    — filename starts with Transaction_
-    4. Google  — filename starts with digits (10+)
-    """
     fname = os.path.basename(filename).upper()
     if "ADSJOY" in fname:
         return "adsjoy"
@@ -76,13 +71,6 @@ def scan_invoices(root_folder):
 
 
 def billing_period_to_parts(raw):
-    """
-    Accepts:
-      'Mar-26'       → ('March', '2026')
-      'March 2026'   → ('March', '2026')
-      '1 Mar 2026'   → ('March', '2026')
-      'Mar 2026'     → ('March', '2026')
-    """
     if not raw:
         return None, None
     raw = raw.strip()
@@ -119,10 +107,9 @@ def read_pdf_text(pdf_path):
         return "".join(p.extract_text() or "" for p in pdf.pages)
 
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # EXTRACTORS
-# ─────────────────────────────────────────────────────────────
-
+# -----------------------------------------------------------------
 def extract_meta(pdf_path):
     text = read_pdf_text(pdf_path)
 
@@ -138,18 +125,14 @@ def extract_meta(pdf_path):
         cur_m2   = re.search(r"\b(USD|SGD|MYR|IDR|AUD|GBP|PHP)\b", text)
         currency = cur_m2.group(1).upper() if cur_m2 else "USD"
 
-    # Tier 1: Advertiser field — use if it's NOT the agency name
     adv_m  = re.search(r"Advertiser[:\s]*([^\n]+)", text, re.I)
     client = adv_m.group(1).strip() if adv_m else ""
 
     if not client or "saatchi" in client.lower() or "m&c" in client.lower():
-
-        # Tier 2: Account ID → client map
         acc_m      = re.search(r"Account Id\s*/\s*Group[:\s]*(\d+)", text, re.I)
         account_id = acc_m.group(1).strip() if acc_m else ""
         client     = META_ACCOUNT_CLIENT.get(account_id, "")
 
-        # Tier 3: Campaign label MCSP_[MARKET]_[CLIENT]_ pattern
         if not client:
             camp_m = re.search(r"(?:MCSP|mcsp)_[A-Z]{2}_([A-Z0-9]+)_", text, re.I)
             if camp_m:
@@ -178,7 +161,6 @@ def extract_google(pdf_path):
         m = re.search(r"Invoice number[:\s.]*(\d+)", text, re.I)
         invoice_number = m.group(1).strip() if m else "UNKNOWN"
 
-    # Month/Year from "Summary for D Mon YYYY"
     month, year = None, None
     sum_m = re.search(r"Summary for\s+\d{1,2}\s+([A-Za-z]{3,})\s+(\d{4})", text, re.I)
     if sum_m:
@@ -193,19 +175,16 @@ def extract_google(pdf_path):
     cur_m    = re.search(r"\b(IDR|MYR|SGD|PHP|USD|GBP|AUD)\b", text)
     currency = cur_m.group(1).upper() if cur_m else "USD"
 
-    # Tier 1: MCSP_[MARKET]_[CLIENT]_ pattern
     client  = "UNKNOWN"
     camp_m  = re.search(r"(?:MCSP|mcsp)_[A-Z]{2}_([A-Z0-9]+)_", text, re.I)
     if camp_m:
         client = camp_m.group(1).upper()
 
-    # Tier 2: mcsp_[CLIENT]_bau_ pattern (IDR invoices)
     if client == "UNKNOWN":
         camp_m2 = re.search(r"(?:MCSP|mcsp)_([A-Z0-9]+)_(?:bau|BAU)_", text, re.I)
         if camp_m2:
             client = camp_m2.group(1).upper()
 
-    # Tier 3: "Account: [NAME]" field e.g. "Account: Ama", "Account: BMYFF"
     if client == "UNKNOWN":
         acc_m = re.search(r"^Account:\s*([A-Z0-9]+)\s*$", text, re.I | re.MULTILINE)
         if acc_m:
@@ -231,7 +210,6 @@ def extract_apple(pdf_path):
         m = re.search(r"Invoice Number[:\s]*([A-Z0-9]+)", text, re.I)
         invoice_number = m.group(1).strip() if m else "UNKNOWN"
 
-    # Month/Year from "Billing Period: 01 Mar 2026 - 31 Mar 2026"
     month, year = None, None
     bp_m = re.search(r"Billing Period\s*[:\s]*(\d{1,2}\s+[A-Za-z]{3,}\s+\d{4})", text, re.I)
     if bp_m:
@@ -250,7 +228,6 @@ def extract_apple(pdf_path):
         cur_m2   = re.search(r"\b(USD|SGD|MYR|IDR|AUD|GBP|PHP)\b", text)
         currency = cur_m2.group(1).upper() if cur_m2 else "USD"
 
-    # Tier 1: "Client : MF" field
     client   = "UNKNOWN"
     client_m = re.search(r"Client\s*[:\s]+([A-Z0-9]{2,10})\b", text, re.I)
     if client_m:
@@ -258,7 +235,6 @@ def extract_apple(pdf_path):
         if val not in ("NAME", "AND", "ADDRESS", "NUMBER", "ID"):
             client = val
 
-    # Tier 2: Description line e.g. "(S)M&C SAATCHI MOBILE ASIA PACIFIC MARC" → last token
     if client == "UNKNOWN":
         desc_m = re.search(r"Description\s*[:\s]*\(S\)[^\n]+\s+([A-Z]{2,6})\s*$", text, re.I | re.MULTILINE)
         if desc_m:
@@ -278,7 +254,6 @@ def extract_adsjoy(pdf_path):
     fname = os.path.basename(pdf_path)
     text  = read_pdf_text(pdf_path)
 
-    # Invoice number from PDF e.g. "Invoice: 26-27/Apr/10"
     inv_m = re.search(r"Invoice[:\s#]*([0-9]{2}-[0-9]{2}/[A-Za-z]{3}/[0-9]+)", text, re.I)
     if not inv_m:
         inv_m = re.search(r"Invoice\s*(?:No\.?|Number|#)?\s*[:\s]*([0-9A-Za-z\-/]+)", text, re.I)
@@ -309,10 +284,9 @@ def extract_adsjoy(pdf_path):
     }
 
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # CORE
-# ─────────────────────────────────────────────────────────────
-
+# -----------------------------------------------------------------
 def extract_info(pdf_path, supplier):
     try:
         if supplier == "meta":
@@ -325,7 +299,7 @@ def extract_info(pdf_path, supplier):
             return extract_adsjoy(pdf_path)
         return None
     except Exception as e:
-        print(f"  ❌ Error: {e}")
+        print(f"  [ERR] {e}")
         return None
 
 
@@ -336,42 +310,44 @@ def build_destination(info):
     return new_name, dest_dir
 
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # MAIN
-# ─────────────────────────────────────────────────────────────
-
+# -----------------------------------------------------------------
 def main():
     print("=" * 65)
-    print("  ACCT-108 Invoice Sorter  |  v2.1")
-    print("  Meta · Google · Apple · AdsJoy")
+    print("  ACCT-108 Invoice Sorter  |  v2.2")
+    print("  Meta | Google | Apple | AdsJoy")
     print("=" * 65)
 
+    # Ensure output folder exists for report
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
     invoices = scan_invoices(INVOICE_FOLDER)
-    print(f"\n🔍 Found {len(invoices)} PDF invoice(s)\n")
+    print(f"\n[SCAN] Found {len(invoices)} PDF invoice(s)\n")
 
     report_rows = []
 
     for fpath in invoices:
         fname    = os.path.basename(fpath)
         supplier = detect_supplier(fname)
-        print(f"📄 {fname}  →  [{supplier.upper()}]")
+        print(f"[PDF]  {fname}  ->  [{supplier.upper()}]")
 
         if supplier == "unknown":
-            print("  ⚠️  Could not detect supplier — skipped")
+            print("  [WARN] Could not detect supplier - skipped")
             report_rows.append({
                 "original_file": fname, "new_filename": "-", "destination": "-",
                 "supplier": "UNKNOWN", "client": "-", "market": "-",
-                "month": "-", "year": "-", "status": "SKIPPED — unknown supplier",
+                "month": "-", "year": "-", "status": "SKIPPED - unknown supplier",
             })
             continue
 
         info = extract_info(fpath, supplier)
         if not info:
-            print("  ❌ Extraction failed — skipped")
+            print("  [ERR]  Extraction failed - skipped")
             report_rows.append({
                 "original_file": fname, "new_filename": "-", "destination": "-",
                 "supplier": supplier, "client": "-", "market": "-",
-                "month": "-", "year": "-", "status": "SKIPPED — extraction error",
+                "month": "-", "year": "-", "status": "SKIPPED - extraction error",
             })
             continue
 
@@ -380,7 +356,7 @@ def main():
 
         os.makedirs(dest_dir, exist_ok=True)
         shutil.copy2(fpath, dest_path)
-        print(f"  ✅ → {dest_path}")
+        print(f"  [OK]  -> {dest_path}")
 
         report_rows.append({
             "original_file": fname,
@@ -391,7 +367,7 @@ def main():
             "market":        info["market"],
             "month":         info["month"],
             "year":          info["year"],
-            "status":        "OK — copied",
+            "status":        "OK - copied",
         })
 
     with open(REPORT_PATH, "w", newline="", encoding="utf-8") as f:
@@ -405,10 +381,10 @@ def main():
     ok      = sum(1 for r in report_rows if r["status"].startswith("OK"))
     skipped = len(report_rows) - ok
     print("\n" + "=" * 65)
-    print(f"  ✅ {ok} file(s) copied successfully")
+    print(f"  [DONE] {ok} file(s) copied successfully")
     if skipped:
-        print(f"  ⚠️  {skipped} file(s) skipped — check {REPORT_PATH}")
-    print(f"  📋 Audit report → {REPORT_PATH}")
+        print(f"  [WARN] {skipped} file(s) skipped - check report")
+    print(f"  [RPT]  Audit report -> Output/invoice_sort_report.csv")
     print("=" * 65)
 
 

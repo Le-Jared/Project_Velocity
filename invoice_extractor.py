@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import warnings
 import pdfplumber
 import pandas as pd
@@ -7,18 +8,24 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+# Windows CP1252 fix - force UTF-8 output
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # CONFIG
-# ─────────────────────────────────────────────────────────────
-TRACKER_PATH   = "ACCT-108 Master Invoice Tracker 2026.xlsx"
+# -----------------------------------------------------------------
+INPUT_FOLDER   = "./Input"
+OUTPUT_FOLDER  = "./Output"
+TRACKER_PATH   = os.path.join(INPUT_FOLDER,  "ACCT-108 Master Invoice Tracker 2026.xlsx")
+OUTPUT_PATH    = os.path.join(OUTPUT_FOLDER, "ACCT-108 Master Invoice Tracker 2026 - Updated.xlsx")
 INVOICE_FOLDER = "./invoices"
-OUTPUT_PATH    = "ACCT-108 Master Invoice Tracker 2026 - Updated.xlsx"
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # COLOUR PALETTE
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 COLOURS = {
     "adsjoy": {"header_bg": "1F3864", "row_alt": "DCE6F1"},
     "apple":  {"header_bg": "1C1C1E", "row_alt": "E8E8E8"},
@@ -27,23 +34,19 @@ COLOURS = {
 }
 
 CURRENCY_COLOURS = {
-    "IDR": "E8F5E9",
-    "MYR": "FFF8E1",
-    "SGD": "E3F2FD",
-    "USD": "F3E5F5",
+    "IDR": "E8F5E9", "MYR": "FFF8E1",
+    "SGD": "E3F2FD", "USD": "F3E5F5",
 }
 CURRENCY_HEADER = {
-    "IDR": "388E3C",
-    "MYR": "F57F17",
-    "SGD": "1565C0",
-    "USD": "6A1B9A",
+    "IDR": "388E3C", "MYR": "F57F17",
+    "SGD": "1565C0", "USD": "6A1B9A",
 }
 WHITE = "FFFFFF"
 DARK  = "1A1A1A"
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # HELPERS
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 def clean_amount(val):
     if val is None:
         return None
@@ -84,7 +87,6 @@ def billing_period_to_str(raw):
 
 
 def fix_date_columns(df):
-    """Convert datetime columns → 'Month YYYY' strings."""
     for col in df.columns:
         if any(k in col.lower() for k in ["month", "billing"]):
             try:
@@ -101,12 +103,9 @@ def make_border(color="D9D9D9"):
     return Border(left=thin, right=thin, top=thin, bottom=thin)
 
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # PARSER 1 — ADSJOY
-# Tracker columns: Month | Supplier Name | Month of Service |
-#   Month of Billing | Client | Invoice number | Campaign |
-#   Campaign ID | Currency  | Amount
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 def parse_adsjoy_pdf(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
         full_text  = ""
@@ -147,7 +146,7 @@ def parse_adsjoy_pdf(pdf_path):
         if m:
             amount = clean_amount(m.group(1))
 
-    print(f"  ✅ AdsJoy: invoice {invoice_number} | Client: {client} | {currency} {amount}")
+    print(f"  [OK] AdsJoy: invoice {invoice_number} | Client: {client} | {currency} {amount}")
     return [{
         "Month":            2026,
         "Supplier Name":    "AdsJoy",
@@ -157,17 +156,14 @@ def parse_adsjoy_pdf(pdf_path):
         "Invoice number":   invoice_number,
         "Campaign":         client,
         "Campaign ID":      "",
-        "Currency ":        currency,   # trailing space matches tracker header exactly
+        "Currency ":        currency,
         "Amount":           amount,
     }]
 
 
-# ─────────────────────────────────────────────────────────────
-# PARSER 2 — APPLE (ASA)  [tracker-first]
-# Tracker columns: Month | Supplier Name | Client |
-#   Month of Service | Month of Billing | Invoice number |
-#   Campaign | Campaign ID | Currency | Amount
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
+# PARSER 2 — APPLE (tracker-first)
+# -----------------------------------------------------------------
 def parse_apple_pdf(pdf_path, tracker_df=None):
     fname = os.path.basename(pdf_path)
     inv_m = re.search(r"(Q\d+)", fname, re.I)
@@ -185,19 +181,16 @@ def parse_apple_pdf(pdf_path, tracker_df=None):
         if inv_col:
             matched = tracker_df[tracker_df[inv_col].astype(str).str.strip() == invoice_number.strip()]
             if not matched.empty:
-                print(f"  ↩️  Apple: invoice {invoice_number} already in tracker — keeping {len(matched)} row(s)")
-                return None  # skip: already handled
+                print(f"  [SKIP] Apple: invoice {invoice_number} already in tracker")
+                return None
 
-    print(f"  ⚠️  Apple: no tracker match for {invoice_number}")
+    print(f"  [WARN] Apple: no tracker match for {invoice_number}")
     return []
 
 
-# ─────────────────────────────────────────────────────────────
-# PARSER 3 — GOOGLE  [tracker-first]
-# Tracker columns: Year | Supplier Name | Ad Account Name |
-#   Month of Service | Month of Billing | Client |
-#   Invoice number | Campaign | Campaign ID | Currency | Amount
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
+# PARSER 3 — GOOGLE (tracker-first)
+# -----------------------------------------------------------------
 def parse_google_pdf(pdf_path, tracker_df=None):
     fname = os.path.basename(pdf_path)
     inv_m = re.search(r"(\d{10})", fname)
@@ -215,19 +208,16 @@ def parse_google_pdf(pdf_path, tracker_df=None):
         if inv_col:
             matched = tracker_df[tracker_df[inv_col].astype(str).str.strip() == invoice_number.strip()]
             if not matched.empty:
-                print(f"  ↩️  Google: invoice {invoice_number} already in tracker — keeping {len(matched)} row(s)")
-                return None  # skip: already handled
+                print(f"  [SKIP] Google: invoice {invoice_number} already in tracker")
+                return None
 
-    print(f"  ⚠️  Google: no tracker match for {invoice_number}")
+    print(f"  [WARN] Google: no tracker match for {invoice_number}")
     return []
 
 
-# ─────────────────────────────────────────────────────────────
-# PARSER 4 — META (FACEBOOK)
-# Tracker columns: Year | Supplier Name | Ad Account ID |
-#   Month of Service | Month of Billing | Client |
-#   Invoice number | Campaign | Campaign ID | Currency | Amount
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
+# PARSER 4 — META
+# -----------------------------------------------------------------
 def parse_meta_pdf(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
         full_text = "".join(p.extract_text() or "" for p in pdf.pages)
@@ -247,30 +237,23 @@ def parse_meta_pdf(pdf_path):
     cur_m    = re.search(r"Invoice Currency[:\s]*(USD|SGD|MYR|IDR|AUD|GBP)", full_text, re.I)
     currency = cur_m.group(1).strip() if cur_m else ""
     if not currency:
-        cur_m2 = re.search(r"\b(USD|SGD|MYR|IDR|AUD|GBP)\b", full_text)
+        cur_m2   = re.search(r"\b(USD|SGD|MYR|IDR|AUD|GBP)\b", full_text)
         currency = cur_m2.group(1) if cur_m2 else ""
 
     tot_m         = re.search(r"Invoice Total[:\s]*([\d,]+\.\d{2})", full_text, re.I)
     invoice_total = clean_amount(tot_m.group(1)) if tot_m else None
 
-    # Extract campaign-level line items
-    # Pattern: line number, campaign name (with optional <CAMPAIGN_ID> tag), amount
     rows = []
-    line_pattern = re.compile(
-        r"^\d+\s+(.+?)\s+([\d,]+\.\d{2})\s*$", re.MULTILINE
-    )
+    line_pattern = re.compile(r"^\d+\s+(.+?)\s+([\d,]+\.\d{2})\s*$", re.MULTILINE)
     for m in line_pattern.finditer(full_text):
         campaign_name = m.group(1).strip()
         amount        = clean_amount(m.group(2))
-        # Skip summary/total lines
         if re.search(r"subtotal|invoice total|freight|vat|gst", campaign_name, re.I):
             continue
         if amount is None:
             continue
-        # Extract Campaign ID from <TAG> if present
         cid_m       = re.search(r"<([A-Z0-9]+)>", campaign_name)
         campaign_id = cid_m.group(1) if cid_m else ""
-
         rows.append({
             "Year":             2026,
             "Supplier Name":    "Meta",
@@ -285,7 +268,6 @@ def parse_meta_pdf(pdf_path):
             "Amount":           amount,
         })
 
-    # Fallback: if no line items extracted, return one summary row
     if not rows:
         rows = [{
             "Year":             2026,
@@ -301,13 +283,13 @@ def parse_meta_pdf(pdf_path):
             "Amount":           invoice_total,
         }]
 
-    print(f"  ✅ Meta: invoice {invoice_number} | Client: {advertiser} | {currency} | {len(rows)} row(s) | Total: {invoice_total}")
+    print(f"  [OK] Meta: invoice {invoice_number} | Client: {advertiser} | {currency} | {len(rows)} row(s) | Total: {invoice_total}")
     return rows
 
 
-# ─────────────────────────────────────────────────────────────
-# EXCEL FORMATTER — data sheets
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
+# EXCEL FORMATTER
+# -----------------------------------------------------------------
 def format_sheet(ws, palette_key, amount_col_names=None):
     pal        = COLOURS[palette_key]
     hdr_fill   = PatternFill("solid", fgColor=pal["header_bg"])
@@ -321,7 +303,6 @@ def format_sheet(ws, palette_key, amount_col_names=None):
         if ws.cell(1, ci).value in amount_col_names
     }
 
-    # Header row
     for cell in ws[1]:
         cell.fill      = hdr_fill
         cell.font      = Font(bold=True, color=WHITE, size=10)
@@ -329,7 +310,6 @@ def format_sheet(ws, palette_key, amount_col_names=None):
         cell.border    = border
     ws.row_dimensions[1].height = 30
 
-    # Data rows
     for ri in range(2, ws.max_row + 1):
         fill = alt_fill if ri % 2 == 0 else white_fill
         for ci in range(1, ws.max_column + 1):
@@ -352,24 +332,22 @@ def format_sheet(ws, palette_key, amount_col_names=None):
         ws.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 55)
 
 
-# ─────────────────────────────────────────────────────────────
-# SUMMARY BUILDER — grouped by currency, sorted alphabetically
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
+# SUMMARY BUILDER
+# -----------------------------------------------------------------
 def build_summary(ws, sheet_map):
     border      = make_border("CCCCCC")
     thin_border = make_border("E0E0E0")
 
-    # Title
     ws.merge_cells("A1:G1")
     c = ws["A1"]
-    c.value     = "ACCT-108  |  Master Invoice Tracker 2026  —  Summary"
+    c.value     = "ACCT-108  |  Master Invoice Tracker 2026  -  Summary"
     c.font      = Font(bold=True, color=DARK, size=13)
     c.fill      = PatternFill("solid", fgColor="F0F4F8")
     c.alignment = Alignment(horizontal="center", vertical="center")
     c.border    = border
     ws.row_dimensions[1].height = 36
 
-    # Column headers
     col_headers = ["Currency", "Supplier", "Sheet", "Clients", "# Invoices", "# Campaigns/Rows", "Total Amount"]
     hdr_fill    = PatternFill("solid", fgColor="2E4057")
     for ci, h in enumerate(col_headers, 1):
@@ -387,7 +365,6 @@ def build_summary(ws, sheet_map):
         "Meta (facebook)": "Meta (Facebook)",
     }
 
-    # Build data rows per supplier × currency
     rows = []
     for sheet_name, df in sheet_map.items():
         if df.empty:
@@ -416,37 +393,34 @@ def build_summary(ws, sheet_map):
                 "total":    total,
             })
 
-    # Sort: defined currency order, then supplier alphabetically
     currency_order = ["IDR", "MYR", "SGD", "USD"]
     rows.sort(key=lambda r: (
         currency_order.index(r["currency"]) if r["currency"] in currency_order else 99,
         r["supplier"]
     ))
 
-    # Write rows with currency section headers
-    ri          = 3
-    last_cur    = None
-    row_counter = 0
+    ri       = 3
+    last_cur = None
+    row_ctr  = 0
 
     for row in rows:
         cur = row["currency"]
-
         if cur != last_cur:
             cur_fg = CURRENCY_HEADER.get(cur, "333333")
             ws.merge_cells(f"A{ri}:G{ri}")
-            cell = ws.cell(ri, 1, f"  {cur}  —  {cur} Invoices")
+            cell = ws.cell(ri, 1, f"  {cur}  -  {cur} Invoices")
             cell.fill      = PatternFill("solid", fgColor=cur_fg)
             cell.font      = Font(bold=True, color=WHITE, size=10)
             cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
             cell.border    = make_border(cur_fg)
             ws.row_dimensions[ri].height = 22
-            ri          += 1
-            last_cur     = cur
-            row_counter  = 0
+            ri      += 1
+            last_cur = cur
+            row_ctr  = 0
 
-        row_counter += 1
+        row_ctr += 1
         fill = (PatternFill("solid", fgColor=CURRENCY_COLOURS.get(cur, "F5F5F5"))
-                if row_counter % 2 == 0
+                if row_ctr % 2 == 0
                 else PatternFill("solid", fgColor=WHITE))
 
         values = [cur, row["supplier"], row["sheet"], row["clients"],
@@ -456,24 +430,21 @@ def build_summary(ws, sheet_map):
             cell.fill      = fill
             cell.border    = thin_border
             cell.alignment = Alignment(vertical="center", wrap_text=False)
-            cell.font      = Font(color=DARK, size=10,
-                                  bold=(ci == 7))   # bold totals only
+            cell.font      = Font(color=DARK, size=10, bold=(ci == 7))
             if ci == 7:
                 cell.number_format = "#,##0.00"
         ws.row_dimensions[ri].height = 20
         ri += 1
 
-    # Column widths
     for i, w in enumerate([10, 18, 18, 38, 13, 18, 18], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
     ws.freeze_panes = "A3"
-    # No auto-filter on summary
 
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # DEDUP HELPER
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 def append_new_rows(existing_df, new_rows, key_col):
     if not new_rows:
         return existing_df
@@ -486,23 +457,33 @@ def append_new_rows(existing_df, new_rows, key_col):
     filtered      = new_df[~new_df[key_col].astype(str).str.strip().isin(existing_keys)]
     skipped       = len(new_df) - len(filtered)
     if skipped:
-        print(f"  ↩️  Skipped {skipped} duplicate(s)")
+        print(f"  [SKIP] {skipped} duplicate(s) not re-added")
     if len(filtered):
-        print(f"  ➕ {len(filtered)} new row(s) added")
+        print(f"  [ADD]  {len(filtered)} new row(s) added")
     return pd.concat([existing_df, filtered], ignore_index=True)
 
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # MAIN
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 def main():
     print("=" * 65)
-    print("  ACCT-108 Invoice Extractor  |  v4.1")
-    print("  AdsJoy · Apple ASA · Google · Meta (Facebook)")
+    print("  ACCT-108 Invoice Extractor  |  v4.2")
+    print("  AdsJoy | Apple ASA | Google | Meta (Facebook)")
     print("=" * 65)
 
-    # 1. Load existing tracker
-    print("\n📂 Loading master tracker...")
+    # Ensure folders exist
+    os.makedirs(INPUT_FOLDER,  exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+    # Guard: check tracker exists
+    if not os.path.exists(TRACKER_PATH):
+        print(f"\n[ERR] Tracker not found: {TRACKER_PATH}")
+        print("      Please place your tracker in the Input/ folder and re-run.")
+        sys.exit(1)
+
+    # 1. Load tracker
+    print(f"\n[LOAD] Loading tracker from Input/...")
     tracker_sheets = pd.read_excel(TRACKER_PATH, sheet_name=None, header=0)
     df_adsjoy = fix_date_columns(tracker_sheets.get("Adsjoy",          pd.DataFrame()))
     df_apple  = fix_date_columns(tracker_sheets.get("Apple (ASA)",     pd.DataFrame()))
@@ -511,13 +492,13 @@ def main():
 
     new_adsjoy, new_meta = [], []
 
-    # 2. Scan all PDFs recursively
+    # 2. Scan invoices
     invoices = scan_invoices(INVOICE_FOLDER)
-    print(f"\n🔍 Found {len(invoices)} PDF invoice(s) across all subfolders\n")
+    print(f"\n[SCAN] Found {len(invoices)} PDF invoice(s) across all subfolders\n")
 
     for fpath, supplier in invoices:
         fname = os.path.basename(fpath)
-        print(f"📄 {fname}  →  [{supplier.upper()}]")
+        print(f"[PDF]  {fname}  ->  [{supplier.upper()}]")
 
         if supplier == "adsjoy":
             new_adsjoy.extend(parse_adsjoy_pdf(fpath))
@@ -528,13 +509,12 @@ def main():
         elif supplier == "meta":
             new_meta.extend(parse_meta_pdf(fpath))
         else:
-            print("  ⚠️  Unknown supplier — skipped")
+            print("  [WARN] Unknown supplier - skipped")
 
     # 3. Merge
-    print("\n📊 Merging into tracker sheets...")
+    print("\n[MERGE] Merging into tracker sheets...")
     df_adsjoy = append_new_rows(df_adsjoy, new_adsjoy, "Invoice number")
     df_meta   = append_new_rows(df_meta,   new_meta,   "Invoice number")
-    # Apple & Google: tracker rows preserved as-is (tracker-first)
 
     sheet_map = {
         "Adsjoy":          df_adsjoy,
@@ -544,14 +524,14 @@ def main():
     }
 
     # 4. Write Excel
-    print(f"\n💾 Writing → {OUTPUT_PATH}")
+    print(f"\n[WRITE] Writing -> Output/...")
     with pd.ExcelWriter(OUTPUT_PATH, engine="openpyxl") as writer:
-        pd.DataFrame().to_excel(writer, sheet_name="📊 Summary", index=False)
+        pd.DataFrame().to_excel(writer, sheet_name="Summary", index=False)
         for sname, df in sheet_map.items():
             df.to_excel(writer, sheet_name=sname, index=False)
 
     # 5. Format
-    print("🎨 Applying formatting...")
+    print("[FORMAT] Applying formatting...")
     wb = load_workbook(OUTPUT_PATH)
 
     fmt_cfg = {
@@ -564,12 +544,12 @@ def main():
         if sname in wb.sheetnames:
             format_sheet(wb[sname], pal, amount_col_names=amt_cols)
 
-    build_summary(wb["📊 Summary"], sheet_map)
-    wb.move_sheet("📊 Summary", offset=-(len(wb.sheetnames) - 1))
+    build_summary(wb["Summary"], sheet_map)
+    wb.move_sheet("Summary", offset=-(len(wb.sheetnames) - 1))
 
     wb.save(OUTPUT_PATH)
-    print("\n✅ Done!")
-    print(f"   Output saved → {OUTPUT_PATH}")
+    print("\n[DONE] Extraction complete!")
+    print(f"       Output -> Output/ACCT-108 Master Invoice Tracker 2026 - Updated.xlsx")
     print("=" * 65)
 
 

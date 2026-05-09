@@ -1,83 +1,72 @@
-"""
-ACCT-108 | Master Workflow  v2.0
-=================================
-Orchestrates both steps in sequence by calling the individual scripts.
-
-Usage
------
-    python run_workflow.py
-
-Requirements
-------------
-    invoice_extractor.py  —  must be in the same folder
-    invoice_sorter.py     —  must be in the same folder
-"""
-
-import subprocess
-import sys
 import os
+import sys
+import subprocess
 from datetime import datetime
 
-# ─────────────────────────────────────────────────────────────
-# ⚙️  CONFIG
-# ─────────────────────────────────────────────────────────────
-EXTRACTOR_SCRIPT = "invoice_extractor.py"
-SORTER_SCRIPT    = "invoice_sorter.py"
+# Force UTF-8 output on Windows
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-# ─────────────────────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────────────────────
+BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
+EXTRACTOR_SCRIPT = os.path.join(BASE_DIR, "invoice_extractor.py")
+SORTER_SCRIPT    = os.path.join(BASE_DIR, "invoice_sorter.py")
 
-def check_scripts_exist():
-    missing = [s for s in [EXTRACTOR_SCRIPT, SORTER_SCRIPT] if not os.path.exists(s)]
-    if missing:
-        print(f"  ❌ Missing script(s): {', '.join(missing)}")
-        print("     Make sure all scripts are in the same folder as run_workflow.py")
-        sys.exit(1)
+SEP = "-" * 65
 
+def run_step(step_num, label, script_path):
+    print(f"\n{SEP}")
+    print(f"  STEP {step_num}: {label}")
+    print(SEP)
 
-def run_step(step_number, label, script):
-    print(f"\n{'─' * 65}")
-    print(f"  STEP {step_number} OF 2  —  {label}")
-    print(f"  Running: {script}")
-    print(f"{'─' * 65}\n")
+    if not os.path.exists(script_path):
+        print(f"[SKIP] Script not found: {script_path}")
+        return False
 
     result = subprocess.run(
-        [sys.executable, script],
-        capture_output=False,   # streams output live to terminal
+        [sys.executable, script_path],
+        capture_output=False,
         text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=BASE_DIR,
     )
 
     if result.returncode != 0:
-        print(f"\n  ❌ {script} exited with error (code {result.returncode})")
-        print("     Workflow stopped. Fix the error above and re-run.")
-        sys.exit(result.returncode)
+        print(f"\n[ERROR] Step {step_num} exited with code {result.returncode}")
+        return False
 
-    print(f"\n  ✅ {script} completed successfully")
+    print(f"\n[OK] Step {step_num} complete.")
+    return True
 
-
-# ─────────────────────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────────────────────
 
 def main():
-    start = datetime.now()
+    print(SEP)
+    print("  ACCT-108 Master Workflow  |  v2.1")
+    print(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(SEP)
 
-    print("=" * 65)
-    print("  ACCT-108 Master Workflow  |  v2.0")
-    print(f"  Started: {start.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 65)
+    steps = [
+        (1, "Extract invoice data -> Master Tracker", EXTRACTOR_SCRIPT),
+        (2, "Sort invoices into client folders",      SORTER_SCRIPT),
+    ]
 
-    check_scripts_exist()
+    results = []
+    for step_num, label, script in steps:
+        ok = run_step(step_num, label, script)
+        results.append((label, ok))
 
-    run_step(1, "Extract invoice data → Master Tracker", EXTRACTOR_SCRIPT)
-    run_step(2, "Sort & rename invoices → Clients/",     SORTER_SCRIPT)
+    print(f"\n{SEP}")
+    print("  WORKFLOW SUMMARY")
+    print(SEP)
+    for label, ok in results:
+        status = "[OK]   " if ok else "[FAIL] "
+        print(f"  {status} {label}")
 
-    elapsed = (datetime.now() - start).seconds
-    print("\n" + "=" * 65)
-    print("  🎉 Workflow complete!")
-    print(f"  ⏱️  Time elapsed: {elapsed}s")
-    print("=" * 65)
+    all_ok = all(ok for _, ok in results)
+    print(f"\n  Result: {'ALL STEPS PASSED' if all_ok else 'SOME STEPS FAILED'}")
+    print(f"  Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(SEP)
+    sys.exit(0 if all_ok else 1)
 
 
 if __name__ == "__main__":
