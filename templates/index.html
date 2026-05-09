@@ -5,92 +5,64 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Project Velocity — ACCT-108</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-    * { font-family: 'Inter', sans-serif; }
-    body { background: #030712; }
-
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #111827; }
-    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-
-    .card-prisma {
-      background: linear-gradient(135deg, #4c1d95 0%, #1e1b4b 60%, #0f172a 100%);
-      border: 1px solid rgba(139,92,246,0.3);
-      box-shadow: 0 0 40px rgba(139,92,246,0.08);
-      transition: box-shadow 0.3s;
-    }
-    .card-invoice {
-      background: linear-gradient(135deg, #0c4a6e 0%, #0e2a4a 60%, #0f172a 100%);
-      border: 1px solid rgba(56,189,248,0.3);
-      box-shadow: 0 0 40px rgba(56,189,248,0.08);
-      transition: box-shadow 0.3s;
-    }
-    .card-prisma:hover  { box-shadow: 0 0 60px rgba(139,92,246,0.18); }
-    .card-invoice:hover { box-shadow: 0 0 60px rgba(56,189,248,0.18); }
-
-    #log-terminal {
-      background: #000;
-      color: #22c55e;
-      font-family: 'Courier New', monospace;
-      font-size: 12px;
-      line-height: 1.6;
-      height: 260px;
-      overflow-y: auto;
-      padding: 14px;
-      border-radius: 0 0 12px 12px;
-      border: 1px solid #1f2937;
-      border-top: none;
-    }
-    .log-ok   { color: #22c55e; }
-    .log-err  { color: #ef4444; }
-    .log-warn { color: #f59e0b; }
-    .log-info { color: #38bdf8; }
-    .log-dim  { color: #6b7280; }
-
-    #drop-zone {
-      border: 2px dashed #374151;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    #drop-zone.drag-over {
-      border-color: #38bdf8;
-      background: rgba(56,189,248,0.05);
-    }
-
-    .pulse-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%,100% { opacity:1; transform:scale(1); }
-      50%      { opacity:0.5; transform:scale(1.3); }
-    }
-
-    .btn-action { transition: all 0.2s; }
-    .btn-action:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
-    .btn-action:active:not(:disabled) { transform: translateY(0); }
-    .btn-action:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    .pipe-step { transition: filter 0.2s; }
-    .pipe-step:hover { filter: brightness(1.2); }
-
-    .spinner {
-      width:14px; height:14px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      display: inline-block;
-      vertical-align: middle;
-      margin-right: 6px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="min-h-screen text-white">
 
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- CLEAR WORKSPACE MODAL                                      -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div id="clear-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="closeClearModal()"></div>
+    <!-- Dialog -->
+    <div class="relative bg-gray-900 border border-red-800 border-opacity-60 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+      <!-- Header -->
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-red-500 bg-opacity-15 flex items-center justify-center text-xl flex-shrink-0">🗑️</div>
+        <div>
+          <p class="font-extrabold text-white text-base">Clear Workspace?</p>
+          <p class="text-xs text-red-400 font-semibold mt-0.5">This action cannot be undone</p>
+        </div>
+      </div>
+      <!-- What will be deleted -->
+      <div class="bg-gray-800 rounded-xl p-4 mb-4 space-y-2">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Will be permanently deleted</p>
+        <div class="flex items-center gap-2.5">
+          <span class="text-red-400 text-sm">✕</span>
+          <span class="text-sm text-gray-200">All PDFs in <code class="text-red-300 bg-gray-700 px-1 rounded">invoices/</code></span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="text-red-400 text-sm">✕</span>
+          <span class="text-sm text-gray-200">All folders inside <code class="text-red-300 bg-gray-700 px-1 rounded">Clients/</code></span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="text-red-400 text-sm">✕</span>
+          <span class="text-sm text-gray-200">All files inside <code class="text-red-300 bg-gray-700 px-1 rounded">Output/</code></span>
+        </div>
+        <div class="border-t border-gray-700 mt-3 pt-3 flex items-center gap-2.5">
+          <span class="text-green-400 text-sm">✓</span>
+          <span class="text-sm text-green-400 font-semibold">Master Tracker <code class="text-green-300 bg-gray-700 px-1 rounded">.xlsx</code> is kept safe</span>
+        </div>
+      </div>
+      <!-- Status line (shown during/after action) -->
+      <div id="clear-modal-status" class="text-xs mb-3 hidden"></div>
+      <!-- Actions -->
+      <div class="flex gap-3">
+        <button onclick="closeClearModal()"
+          class="flex-1 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-gray-300 font-bold text-sm transition">
+          Cancel
+        </button>
+        <button id="btn-clear-confirm" onclick="confirmClearWorkspace()"
+          class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition">
+          🗑️ Yes, Clear Everything
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- HEADER -->
-  <header class="border-b border-gray-800 bg-gray-950 bg-opacity-80 backdrop-blur sticky top-0 z-50">
+  <header class="border-b border-gray-800 bg-gray-950 bg-opacity-80 backdrop-blur sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-sm font-black">V</div>
@@ -100,6 +72,13 @@
         </div>
       </div>
       <div class="flex items-center gap-3">
+        <div id="drive-badge-connected" class="hidden items-center gap-1.5 text-xs font-semibold text-green-400 bg-green-500 bg-opacity-10 border border-green-500 border-opacity-30 px-2.5 py-1 rounded-full">
+          <div class="pulse-dot bg-green-400"></div> Drive Connected
+        </div>
+        <div id="drive-badge-disconnected" class="flex items-center gap-1.5 text-xs font-semibold text-gray-500 bg-gray-800 px-2.5 py-1 rounded-full">
+          ☁️ Drive Not Connected
+        </div>
+        <span class="text-xs text-gray-600">|</span>
         <div class="flex items-center gap-1.5 text-xs text-gray-400">
           <div class="pulse-dot bg-green-500"></div>
           <span id="server-status">Server running</span>
@@ -110,80 +89,117 @@
     </div>
   </header>
 
-  <main class="max-w-6xl mx-auto px-6 py-8 space-y-8">
+  <main class="max-w-6xl mx-auto px-6 py-8 space-y-0">
 
-    <!-- STATUS BAR -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-        <p class="text-2xl font-black text-white" id="stat-pdfs">—</p>
-        <p class="text-xs text-gray-500 mt-1">PDFs in /invoices</p>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-        <p class="text-2xl font-black text-white" id="stat-clients">—</p>
-        <p class="text-xs text-gray-500 mt-1">Client Folders</p>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-        <p class="text-sm font-bold text-gray-400" id="stat-tracker">—</p>
-        <p class="text-xs text-gray-500 mt-1">Master Tracker</p>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-        <p class="text-sm font-bold text-gray-400" id="stat-report">—</p>
-        <p class="text-xs text-gray-500 mt-1">Sort Report</p>
-      </div>
+    <!-- TAB BAR -->
+    <div class="flex items-end gap-1 border-b border-gray-800">
+      <button id="tab-prisma-btn"   class="tab-btn active-prisma" onclick="switchTab('prisma')">📐 Prisma</button>
+      <button id="tab-invoices-btn" class="tab-btn inactive"      onclick="switchTab('invoices')">🧾 Invoices</button>
     </div>
 
-    <!-- TWO BUBBLES -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-      <!-- PRISMA -->
-      <div class="card-prisma rounded-2xl p-6 flex flex-col gap-5">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-2xl bg-white bg-opacity-10 flex items-center justify-center text-2xl">📐</div>
+    <!-- PRISMA TAB -->
+    <div id="tab-prisma" class="tab-panel active pt-8 space-y-6">
+      <div class="card-prisma rounded-2xl p-8 flex flex-col gap-6 max-w-2xl mx-auto">
+        <div class="flex items-center gap-4">
+          <div class="w-14 h-14 rounded-2xl bg-white bg-opacity-10 flex items-center justify-center text-3xl">📐</div>
           <div>
-            <h2 class="text-xl font-extrabold">Prisma</h2>
-            <p class="text-xs text-violet-300">Media Plan → Import File</p>
-          </div>
-          <span class="ml-auto text-xs font-semibold bg-violet-500 bg-opacity-30 text-violet-300 px-2 py-1 rounded-full border border-violet-500 border-opacity-30">Module 1</span>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
-            <p class="text-xl font-black">1</p>
-            <p class="text-xs text-gray-400 mt-0.5">Upload</p>
-          </div>
-          <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
-            <p class="text-xl font-black">100%</p>
-            <p class="text-xs text-gray-400 mt-0.5">Auto-mapped</p>
+            <h2 class="text-2xl font-extrabold">Prisma</h2>
+            <p class="text-sm text-violet-300">Media Plan → Import File</p>
           </div>
         </div>
-        <div class="flex-1 space-y-0">
-          <div class="flex items-start gap-3 py-2.5 border-b border-white border-opacity-5">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white bg-opacity-5 rounded-xl p-4 text-center">
+            <p class="text-2xl font-black">1</p><p class="text-xs text-gray-400 mt-0.5">Upload</p>
+          </div>
+          <div class="bg-white bg-opacity-5 rounded-xl p-4 text-center">
+            <p class="text-2xl font-black">100%</p><p class="text-xs text-gray-400 mt-0.5">Auto-mapped</p>
+          </div>
+        </div>
+        <div class="space-y-0">
+          <div class="flex items-start gap-3 py-3 border-b border-white border-opacity-5">
             <span class="text-base mt-0.5">📋</span>
             <div class="flex-1"><p class="text-sm font-semibold">Media Plan Ingestion</p><p class="text-xs text-gray-400">Upload media plan → auto-parse placements</p></div>
             <span class="text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full">Live</span>
           </div>
-          <div class="flex items-start gap-3 py-2.5 border-b border-white border-opacity-5">
+          <div class="flex items-start gap-3 py-3 border-b border-white border-opacity-5">
             <span class="text-base mt-0.5">🔄</span>
             <div class="flex-1"><p class="text-sm font-semibold">Prisma Format Converter</p><p class="text-xs text-gray-400">Maps fields to Prisma import template</p></div>
             <span class="text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full">Live</span>
           </div>
-          <div class="flex items-start gap-3 py-2.5 border-b border-white border-opacity-5">
+          <div class="flex items-start gap-3 py-3 border-b border-white border-opacity-5">
             <span class="text-base mt-0.5">✅</span>
             <div class="flex-1"><p class="text-sm font-semibold">Validation Check</p><p class="text-xs text-gray-400">Flags missing or mismatched fields</p></div>
             <span class="text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full">Live</span>
           </div>
-          <div class="flex items-start gap-3 py-2.5">
+          <div class="flex items-start gap-3 py-3">
             <span class="text-base mt-0.5">📤</span>
             <div class="flex-1"><p class="text-sm font-semibold">Export Import File</p><p class="text-xs text-gray-400">Download ready-to-upload .xlsx for Prisma</p></div>
             <span class="text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full">Live</span>
           </div>
         </div>
-        <button onclick="alert('Prisma upload coming soon — connect your media plan file.')"
+        <button onclick="alert('Prisma upload coming soon.')"
           class="btn-action w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm">
           Upload Media Plan →
         </button>
       </div>
+    </div>
 
-      <!-- INVOICES -->
+    <!-- INVOICES TAB -->
+    <div id="tab-invoices" class="tab-panel pt-8 space-y-8">
+
+      <!-- STATUS BAR -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+          <p class="text-2xl font-black text-white" id="stat-pdfs">—</p>
+          <p class="text-xs text-gray-500 mt-1">PDFs in /invoices</p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+          <p class="text-2xl font-black text-white" id="stat-clients">—</p>
+          <p class="text-xs text-gray-500 mt-1">Client Folders</p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center flex flex-col items-center justify-center gap-1.5">
+          <p class="text-sm font-bold" id="stat-tracker">—</p>
+          <p class="text-xs text-gray-500">Master Tracker</p>
+          <button onclick="document.getElementById('tracker-input').click()"
+            class="text-xs text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition">
+            Upload Tracker
+          </button>
+          <input type="file" id="tracker-input" accept=".xlsx" class="hidden" onchange="uploadTracker(this.files[0])" />
+          <div id="tracker-upload-status" class="text-xs text-indigo-300 hidden"></div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center flex flex-col items-center justify-center gap-1.5">
+          <p class="text-sm font-bold" id="stat-report">—</p>
+          <p class="text-xs text-gray-500">Sort Report</p>
+          <button id="btn-download-report" onclick="downloadReport()"
+            class="text-xs text-sky-400 hover:text-sky-300 underline underline-offset-2 transition hidden">
+            ⬇ Download CSV
+          </button>
+          <p id="report-na" class="text-xs text-gray-600">Run sort first</p>
+        </div>
+      </div>
+
+      <!-- ══ CLEAR WORKSPACE BANNER ══ -->
+      <div class="bg-gray-900 border border-red-900 border-opacity-50 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 rounded-xl bg-red-500 bg-opacity-10 flex items-center justify-center text-lg flex-shrink-0">🗑️</div>
+          <div>
+            <p class="text-sm font-bold text-white">Clear Workspace</p>
+            <p class="text-xs text-gray-400 mt-0.5">
+              Wipes <code class="text-red-300">invoices/</code>, <code class="text-red-300">Clients/</code> and <code class="text-red-300">Output/</code>.
+              <span class="text-green-400 font-semibold">Master Tracker is always kept.</span>
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <div id="clear-workspace-status" class="text-xs hidden"></div>
+          <button id="btn-clear-workspace" onclick="openClearModal()"
+            class="btn-action px-5 py-2.5 rounded-xl bg-red-800 hover:bg-red-700 border border-red-700 border-opacity-60 text-red-200 font-bold text-xs whitespace-nowrap transition">
+            🗑️ Clear Invoices &amp; Output
+          </button>
+        </div>
+      </div>
+
+      <!-- INVOICE MODULE CARD -->
       <div class="card-invoice rounded-2xl p-6 flex flex-col gap-5">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-2xl bg-white bg-opacity-10 flex items-center justify-center text-2xl">🧾</div>
@@ -191,20 +207,17 @@
             <h2 class="text-xl font-extrabold">Invoices</h2>
             <p class="text-xs text-sky-300">Extract · Sort · Track</p>
           </div>
-          <span class="ml-auto text-xs font-semibold bg-sky-500 bg-opacity-30 text-sky-300 px-2 py-1 rounded-full border border-sky-500 border-opacity-30">Module 2</span>
         </div>
         <div class="grid grid-cols-3 gap-2">
           <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
-            <p class="text-xl font-black">4</p>
-            <p class="text-xs text-gray-400 mt-0.5">Suppliers</p>
+            <p class="text-xl font-black">4</p><p class="text-xs text-gray-400 mt-0.5">Suppliers</p>
           </div>
           <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
-            <p class="text-xl font-black" id="bubble-pdfs">—</p>
-            <p class="text-xs text-gray-400 mt-0.5">Invoices</p>
+            <p class="text-xl font-black" id="bubble-pdfs">—</p><p class="text-xs text-gray-400 mt-0.5">Invoices</p>
           </div>
-          <div class="bg-yellow-500 bg-opacity-10 border border-yellow-500 border-opacity-20 rounded-xl p-3 text-center">
+          <div id="drive-mini-badge" class="bg-gray-700 bg-opacity-40 border border-gray-600 border-opacity-30 rounded-xl p-3 text-center">
             <p class="text-xl font-black">☁️</p>
-            <p class="text-xs text-yellow-400 mt-0.5">Drive Soon</p>
+            <p class="text-xs text-gray-400 mt-0.5" id="drive-mini-label">Not Connected</p>
           </div>
         </div>
         <div class="flex-1 space-y-0">
@@ -231,11 +244,9 @@
           <div class="flex items-start gap-3 py-2.5">
             <span class="text-base mt-0.5">☁️</span>
             <div class="flex-1"><p class="text-sm font-semibold">Google Drive Sync</p><p class="text-xs text-gray-400">Push sorted files directly to Drive folders</p></div>
-            <span class="text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full">Planned</span>
+            <span id="drive-feature-badge" class="text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full">Not Connected</span>
           </div>
         </div>
-
-        <!-- ACTION BUTTONS -->
         <div class="grid grid-cols-2 gap-2">
           <button id="btn-workflow" onclick="runStream('workflow')"
             class="btn-action col-span-2 py-3 rounded-xl bg-sky-600 text-white font-bold text-sm">
@@ -251,223 +262,245 @@
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- UPLOAD DROP ZONE -->
-    <div id="drop-zone" class="rounded-2xl p-8 text-center cursor-pointer bg-gray-900"
-      ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
-      onclick="document.getElementById('file-input').click()">
-      <input type="file" id="file-input" multiple accept=".pdf" class="hidden" onchange="uploadFiles(this.files)" />
-      <div class="text-3xl mb-2">📂</div>
-      <p class="text-sm font-semibold text-gray-300">Drag & drop PDF invoices here</p>
-      <p class="text-xs text-gray-600 mt-1">or click to browse — files saved to <code class="text-gray-400">/invoices</code></p>
-      <div id="upload-status" class="mt-3 text-xs text-sky-400 hidden"></div>
-    </div>
+      <!-- PDF DROP ZONE -->
+      <div id="drop-zone" class="rounded-2xl p-8 text-center cursor-pointer bg-gray-900"
+        ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
+        onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" multiple accept=".pdf" class="hidden" onchange="uploadFiles(this.files)" />
+        <div class="text-3xl mb-2">📂</div>
+        <p class="text-sm font-semibold text-gray-300">Drag & drop PDF invoices here</p>
+        <p class="text-xs text-gray-600 mt-1">or click to browse — files saved to <code class="text-gray-400">invoices/</code></p>
+        <div id="upload-status" class="mt-3 text-xs text-sky-400 hidden"></div>
+      </div>
 
-    <!-- LIVE LOG TERMINAL -->
-    <div>
-      <div class="flex items-center justify-between px-5 py-3 bg-gray-900 border border-gray-800 rounded-t-2xl border-b-0">
-        <div class="flex items-center gap-2">
-          <div class="w-3 h-3 rounded-full bg-red-500"></div>
-          <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-          <div class="w-3 h-3 rounded-full bg-green-500"></div>
-          <span class="ml-3 text-xs text-gray-500 font-mono">terminal — live output</span>
+      <!-- TERMINAL -->
+      <div>
+        <div class="flex items-center justify-between px-5 py-3 bg-gray-900 border border-gray-800 rounded-t-2xl border-b-0">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+            <span class="ml-3 text-xs text-gray-500 font-mono">terminal — live output</span>
+          </div>
+          <button onclick="clearLog()" class="text-xs text-gray-600 hover:text-gray-400 transition">Clear</button>
         </div>
-        <button onclick="clearLog()" class="text-xs text-gray-600 hover:text-gray-400 transition">Clear</button>
+        <div id="log-terminal"><span class="log-dim">$ waiting for command…</span></div>
       </div>
-      <div id="log-terminal"><span class="log-dim">$ waiting for command…</span></div>
-    </div>
 
-    <!-- PIPELINE BANNER -->
-    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-      <p class="text-xs font-bold tracking-widest text-gray-600 uppercase mb-4">End-to-End Pipeline</p>
-      <div class="flex items-center gap-2 flex-wrap">
-        <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📥 Drop PDFs</div>
-        <span class="text-gray-700 font-bold">→</span>
-        <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">🔍 Detect Supplier</div>
-        <span class="text-gray-700 font-bold">→</span>
-        <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📊 Extract Data</div>
-        <span class="text-gray-700 font-bold">→</span>
-        <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📝 Update Tracker</div>
-        <span class="text-gray-700 font-bold">→</span>
-        <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📁 Sort Files</div>
-        <span class="text-gray-700 font-bold">→</span>
-        <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-900 text-yellow-300 border border-yellow-700 border-opacity-50">☁️ Drive Sync</div>
-      </div>
-    </div>
-
-    <!-- DRIVE SYNC CARD -->
-    <div class="bg-gray-900 border border-yellow-800 border-opacity-40 rounded-2xl p-6">
-      <div class="flex items-start gap-4">
-        <div class="w-10 h-10 rounded-xl bg-yellow-500 bg-opacity-10 flex items-center justify-center text-xl flex-shrink-0">☁️</div>
-        <div class="flex-1">
-          <div class="flex items-center gap-2 mb-1">
-            <h3 class="font-bold text-white">Google Drive Sync</h3>
-            <span class="text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full">Planned</span>
-          </div>
-          <p class="text-xs text-gray-400 mb-4">Automatically push sorted invoices and the updated master tracker to Google Drive. Requires a service account credentials file.</p>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <div class="bg-gray-800 rounded-lg p-3">
-              <p class="text-xs font-bold text-gray-300">Step 1</p>
-              <p class="text-xs text-gray-500 mt-0.5">Create Google Cloud project & enable Drive API</p>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-3">
-              <p class="text-xs font-bold text-gray-300">Step 2</p>
-              <p class="text-xs text-gray-500 mt-0.5">Download service account <code>credentials.json</code></p>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-3">
-              <p class="text-xs font-bold text-gray-300">Step 3</p>
-              <p class="text-xs text-gray-500 mt-0.5">Drop <code>credentials.json</code> in project root & click sync</p>
-            </div>
-          </div>
-          <button id="btn-drive" onclick="runDriveSync()"
-            class="btn-action px-5 py-2.5 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-sm">
-            ☁️ Sync to Google Drive
-          </button>
+      <!-- PIPELINE BANNER -->
+      <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        <p class="text-xs font-bold tracking-widest text-gray-600 uppercase mb-4">End-to-End Pipeline</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📥 Drop PDFs</div>
+          <span class="text-gray-700 font-bold">→</span>
+          <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">🔍 Detect Supplier</div>
+          <span class="text-gray-700 font-bold">→</span>
+          <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📊 Extract Data</div>
+          <span class="text-gray-700 font-bold">→</span>
+          <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📝 Update Tracker</div>
+          <span class="text-gray-700 font-bold">→</span>
+          <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📁 Sort Files</div>
+          <span class="text-gray-700 font-bold">→</span>
+          <div id="pipe-drive" class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-900 text-yellow-300 border border-yellow-700 border-opacity-50">☁️ Drive Sync</div>
         </div>
       </div>
-    </div>
 
+      <!-- DOWNLOADS CARD -->
+      <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+        <div class="flex items-center gap-3 mb-5">
+          <div class="w-10 h-10 rounded-xl bg-indigo-500 bg-opacity-10 flex items-center justify-center text-xl flex-shrink-0">⬇️</div>
+          <div>
+            <h3 class="font-bold text-white">Downloads</h3>
+            <p class="text-xs text-gray-400">Export sorted files and updated tracker to your computer</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <!-- Clients ZIP -->
+          <div class="bg-gray-800 rounded-xl p-4 flex flex-col gap-3">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">📁</span>
+              <div>
+                <p class="text-sm font-bold text-white">Clients Folder</p>
+                <p class="text-xs text-gray-400">All sorted invoices as a ZIP archive</p>
+              </div>
+            </div>
+            <div class="bg-gray-900 rounded-lg px-3 py-2.5 font-mono text-xs leading-relaxed text-gray-400 border border-gray-700">
+              <p class="text-gray-500 mb-1">📦 Clients.zip structure:</p>
+              <p><span class="text-indigo-400">Clients/</span></p>
+              <p>&nbsp;&nbsp;<span class="text-sky-400">└── {CLIENT}/</span><span class="text-gray-600 ml-1 font-sans not-italic text-xs">e.g. BHC, MF, GT</span></p>
+              <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-green-400">└── {MARKET}/</span><span class="text-gray-600 ml-1 font-sans not-italic text-xs">e.g. SG, MY, ID</span></p>
+              <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">└── {YEAR}/</span><span class="text-gray-600 ml-1 font-sans not-italic text-xs">e.g. 2026</span></p>
+              <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-orange-400">└── {MONTH}/</span><span class="text-gray-600 ml-1 font-sans not-italic text-xs">e.g. March</span></p>
+              <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-white text-xs">└── file.pdf</span></p>
+            </div>
+            <div class="bg-gray-900 rounded-lg px-3 py-2 border border-gray-700">
+              <p class="text-xs text-gray-500 mb-1.5 font-semibold uppercase tracking-wide">Example filename</p>
+              <code class="text-xs text-green-400 break-all">BHC_Meta_SG_MAR26_2230265437.pdf</code>
+              <div class="mt-2 flex flex-wrap gap-1">
+                <span class="text-xs bg-gray-700 text-sky-300 px-1.5 py-0.5 rounded">BHC = Client</span>
+                <span class="text-xs bg-gray-700 text-purple-300 px-1.5 py-0.5 rounded">Meta = Supplier</span>
+                <span class="text-xs bg-gray-700 text-green-300 px-1.5 py-0.5 rounded">SG = Market</span>
+                <span class="text-xs bg-gray-700 text-yellow-300 px-1.5 py-0.5 rounded">MAR26 = Month</span>
+                <span class="text-xs bg-gray-700 text-orange-300 px-1.5 py-0.5 rounded">2230265437 = Invoice #</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500">
+                <span id="clients-zip-count" class="font-semibold text-white">—</span> client folders
+              </span>
+            </div>
+            <button id="btn-download-clients" onclick="downloadClientsZip()"
+              class="btn-action w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs">
+              ⬇ Download Clients.zip
+            </button>
+            <div id="clients-zip-dl-status" class="text-xs hidden"></div>
+          </div>
+
+          <!-- Master Tracker -->
+          <div class="bg-gray-800 rounded-xl p-4 flex flex-col gap-3">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">📊</span>
+              <div>
+                <p class="text-sm font-bold text-white">Master Invoice Tracker</p>
+                <p class="text-xs text-gray-400">Updated .xlsx with all extracted invoice data</p>
+              </div>
+            </div>
+            <div class="bg-gray-900 rounded-lg px-3 py-2.5 font-mono text-xs leading-relaxed text-gray-400 border border-gray-700">
+              <p class="text-gray-500 mb-1">📋 Tracker sheets:</p>
+              <p><span class="text-white">📄</span> <span class="text-blue-300">Summary</span><span class="text-gray-600 font-sans ml-1">— totals by currency &amp; supplier</span></p>
+              <p><span class="text-white">📄</span> <span class="text-indigo-300">Adsjoy</span><span class="text-gray-600 font-sans ml-1">— AdsJoy invoices</span></p>
+              <p><span class="text-white">📄</span> <span class="text-gray-300">Apple (ASA)</span><span class="text-gray-600 font-sans ml-1">— Apple Search Ads</span></p>
+              <p><span class="text-white">📄</span> <span class="text-blue-400">Google</span><span class="text-gray-600 font-sans ml-1">— Google Ads invoices</span></p>
+              <p><span class="text-white">📄</span> <span class="text-blue-500">Meta (facebook)</span><span class="text-gray-600 font-sans ml-1">— Meta invoices</span></p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500">Status: </span>
+              <span id="tracker-dl-status-text" class="text-xs font-semibold text-gray-400">—</span>
+            </div>
+            <button id="btn-download-tracker" onclick="downloadTracker()"
+              class="btn-action w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">
+              ⬇ Download Tracker.xlsx
+            </button>
+            <div id="tracker-dl-status" class="text-xs hidden"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- GOOGLE DRIVE SYNC CARD -->
+      <div id="drive-card" class="bg-gray-900 border border-yellow-800 border-opacity-40 rounded-2xl p-6">
+        <div class="flex items-start gap-4">
+          <div class="w-10 h-10 rounded-xl bg-yellow-500 bg-opacity-10 flex items-center justify-center text-xl flex-shrink-0">☁️</div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="font-bold text-white">Google Drive Sync</h3>
+              <span id="drive-card-badge" class="text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full">Not Connected</span>
+            </div>
+            <p class="text-xs text-gray-400 mb-5">Mirrors your <code class="text-gray-300">Clients/</code> folder to Google Drive. Skips files already uploaded.</p>
+
+            <!-- NOT CONNECTED STATE -->
+            <div id="drive-not-connected">
+              <div class="mb-5">
+                <div class="flex items-center gap-2 mb-3">
+                  <div class="w-5 h-5 rounded-full bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-yellow-400">1</div>
+                  <p class="text-xs font-bold text-gray-300">Upload Service Account Key</p>
+                </div>
+                <div id="creds-drop-zone" class="rounded-xl p-5 text-center cursor-pointer"
+                  ondragover="onCredsDragOver(event)" ondragleave="onCredsDragLeave()" ondrop="onCredsDrop(event)"
+                  onclick="document.getElementById('creds-input').click()">
+                  <input type="file" id="creds-input" accept=".json" class="hidden" onchange="uploadCredentials(this.files[0])" />
+                  <div class="text-xl mb-1">🔑</div>
+                  <p class="text-sm font-semibold text-gray-300">Drop <code class="text-yellow-400">credentials.json</code> here</p>
+                  <p class="text-xs text-gray-600 mt-0.5">Google Cloud → Service Account → Keys → Create JSON key</p>
+                  <div id="creds-upload-status" class="mt-2 text-xs text-yellow-400 hidden"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center gap-2 mb-3">
+                  <div class="w-5 h-5 rounded-full bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-yellow-400">2</div>
+                  <p class="text-xs font-bold text-gray-300">Set Target Drive Folder ID</p>
+                </div>
+                <div class="bg-gray-800 rounded-xl p-4 space-y-3">
+                  <div class="text-xs text-gray-400 space-y-1">
+                    <p>① Go to <span class="text-white font-semibold">drive.google.com</span> → open your target folder</p>
+                    <p>② Copy the ID from the URL: <code class="text-yellow-300 bg-gray-700 px-1 py-0.5 rounded">drive.google.com/drive/folders/<span class="text-green-400">THIS_PART</span></code></p>
+                    <p>③ Share that folder with your <code class="text-yellow-300">client_email</code> from credentials.json as <span class="text-white font-semibold">Editor</span></p>
+                  </div>
+                  <div class="flex gap-2">
+                    <input id="folder-id-input" type="text"
+                      placeholder="e.g. 1ouHp4nx03SGy_zTadWAWHB9R61Kz5v0A"
+                      class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500 transition font-mono" />
+                    <button onclick="saveFolderID()"
+                      class="btn-action px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-xs flex-shrink-0">
+                      Save
+                    </button>
+                  </div>
+                  <div id="folder-id-status" class="text-xs text-yellow-400 hidden"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CONNECTED STATE -->
+            <div id="drive-connected" class="hidden space-y-4">
+              <div class="flex items-center gap-3 bg-green-500 bg-opacity-10 border border-green-500 border-opacity-30 rounded-xl px-4 py-3">
+                <div class="pulse-dot bg-green-400 flex-shrink-0"></div>
+                <div class="flex-1">
+                  <p class="text-sm font-bold text-green-400">Connected to Google Drive</p>
+                  <p class="text-xs text-gray-400 mt-0.5" id="creds-filename">credentials.json loaded</p>
+                </div>
+                <button onclick="replaceCredentials()" class="text-xs text-gray-400 hover:text-white underline underline-offset-2 transition flex-shrink-0">Replace Key</button>
+                <button onclick="removeCredentials()" class="text-xs text-red-400 hover:text-red-300 underline underline-offset-2 transition flex-shrink-0 ml-2">Disconnect</button>
+              </div>
+              <div class="bg-gray-800 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-xs font-bold text-gray-300">📁 Target Drive Folder</p>
+                  <button onclick="toggleEditFolderID()" id="btn-edit-folder" class="text-xs text-sky-400 hover:text-sky-300 underline underline-offset-2 transition">Edit</button>
+                </div>
+                <div id="folder-id-display" class="flex items-center gap-2">
+                  <code class="text-xs text-green-400 bg-gray-700 px-2 py-1 rounded font-mono flex-1 truncate" id="folder-id-display-val">—</code>
+                  <span class="text-xs text-green-400 font-semibold">✓ Set</span>
+                </div>
+                <div id="folder-id-edit" class="hidden space-y-2">
+                  <div class="flex gap-2">
+                    <input id="folder-id-input-connected" type="text"
+                      placeholder="Paste new folder ID"
+                      class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition font-mono" />
+                    <button onclick="saveFolderIDConnected()"
+                      class="btn-action px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-bold text-xs flex-shrink-0">
+                      Update
+                    </button>
+                    <button onclick="toggleEditFolderID()"
+                      class="px-3 py-2 rounded-lg bg-gray-700 text-gray-400 text-xs flex-shrink-0">
+                      Cancel
+                    </button>
+                  </div>
+                  <p class="text-xs text-gray-500">Get it from the Drive URL: <code class="text-gray-400">drive.google.com/drive/folders/<span class="text-yellow-400">FOLDER_ID</span></code></p>
+                </div>
+                <div id="folder-id-status-connected" class="text-xs text-green-400 mt-2 hidden"></div>
+              </div>
+              <input type="file" id="creds-replace-input" accept=".json" class="hidden" onchange="uploadCredentials(this.files[0])" />
+              <div class="flex items-center gap-3 flex-wrap">
+                <button id="btn-drive" onclick="runDriveSync()"
+                  class="btn-action px-6 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold text-sm">
+                  ☁️ Sync Clients to Drive
+                </button>
+                <p class="text-xs text-gray-500">Pushes <code class="text-gray-400">Clients/</code> → your Drive folder. Skips existing files.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
   </main>
 
   <footer class="border-t border-gray-900 mt-12 py-6 text-center text-xs text-gray-700">
     Project Velocity · ACCT-108 · Media Ops & Financial Reconciliation Sync
   </footer>
 
-  <script>
-    // ── Status polling ──────────────────────────────────────
-    async function refreshStatus() {
-      try {
-        const res = await fetch('/api/status');
-        const d   = await res.json();
-
-        document.getElementById('stat-pdfs').textContent    = d.pdf_count ?? '—';
-        document.getElementById('stat-clients').textContent = d.client_folders ?? '—';
-        document.getElementById('bubble-pdfs').textContent  = d.pdf_count ?? '—';
-
-        const tracker = document.getElementById('stat-tracker');
-        tracker.textContent = d.tracker_exists ? '✅ Found' : '❌ Missing';
-        tracker.className   = 'text-sm font-bold ' + (d.tracker_exists ? 'text-green-400' : 'text-red-400');
-
-        const report = document.getElementById('stat-report');
-        report.textContent = d.report_exists ? '✅ Found' : '— None yet';
-        report.className   = 'text-sm font-bold ' + (d.report_exists ? 'text-green-400' : 'text-gray-500');
-
-        document.getElementById('last-refresh').textContent =
-          'Updated ' + new Date().toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-      } catch(e) {
-        document.getElementById('server-status').textContent = 'Server unreachable';
-      }
-    }
-    refreshStatus();
-    setInterval(refreshStatus, 8000);
-
-    // ── Terminal ────────────────────────────────────────────
-    const terminal = document.getElementById('log-terminal');
-
-    function logLine(text, cls = 'log-ok') {
-      const span = document.createElement('span');
-      span.className = cls + ' block';
-      span.textContent = text;
-      terminal.appendChild(span);
-      terminal.scrollTop = terminal.scrollHeight;
-    }
-
-    function clearLog() {
-      terminal.innerHTML = '<span class="log-dim">$ log cleared…</span>';
-    }
-
-    function classifyLine(line) {
-      if (/error|fail|❌/i.test(line))               return 'log-err';
-      if (/warn|⚠️/i.test(line))                     return 'log-warn';
-      if (/✅|done|success|complete|finish/i.test(line)) return 'log-ok';
-      if (/→|↩️|skip|already|===|---/i.test(line))  return 'log-dim';
-      return 'log-info';
-    }
-
-    // ── Stream runner (plain text fetch) ────────────────────
-    const BTN_IDS = { workflow: 'btn-workflow', extract: 'btn-extract', sort: 'btn-sort' };
-
-    async function runStream(type) {
-      const btn      = document.getElementById(BTN_IDS[type]);
-      const origHTML = btn.innerHTML;
-      btn.disabled   = true;
-      btn.innerHTML  = '<span class="spinner"></span> Running…';
-
-      clearLog();
-      logLine('$ running ' + type + '…', 'log-dim');
-
-      try {
-        const res = await fetch('/api/run/' + type);
-        if (!res.ok) { logLine('❌ Server error: ' + res.status, 'log-err'); return; }
-
-        const reader  = res.body.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          decoder.decode(value).split('\n').forEach(line => {
-            if (line.trim()) logLine(line, classifyLine(line));
-          });
-        }
-      } catch(e) {
-        logLine('❌ ' + e.message, 'log-err');
-      } finally {
-        btn.disabled  = false;
-        btn.innerHTML = origHTML;
-        refreshStatus();
-      }
-    }
-
-    // ── Drive Sync ──────────────────────────────────────────
-    async function runDriveSync() {
-      const btn      = document.getElementById('btn-drive');
-      const origHTML = btn.innerHTML;
-      btn.disabled   = true;
-      btn.innerHTML  = '<span class="spinner"></span> Syncing…';
-      clearLog();
-      logLine('$ initiating Google Drive sync…', 'log-dim');
-      try {
-        const res  = await fetch('/api/drive/sync', { method: 'POST' });
-        const data = await res.json();
-        logLine(data.message || 'Drive sync response received.', res.ok ? 'log-ok' : 'log-warn');
-      } catch(e) {
-        logLine('❌ Drive sync error: ' + e.message, 'log-err');
-      } finally {
-        btn.disabled  = false;
-        btn.innerHTML = origHTML;
-      }
-    }
-
-    // ── Drag & Drop Upload ──────────────────────────────────
-    function onDragOver(e)  { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
-    function onDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
-    function onDrop(e) {
-      e.preventDefault();
-      document.getElementById('drop-zone').classList.remove('drag-over');
-      uploadFiles(e.dataTransfer.files);
-    }
-
-    async function uploadFiles(files) {
-      if (!files || files.length === 0) return;
-      const status = document.getElementById('upload-status');
-      status.classList.remove('hidden');
-      status.textContent = 'Uploading ' + files.length + ' file(s)…';
-
-      const form = new FormData();
-      for (const f of files) form.append('files', f);
-
-      try {
-        const res  = await fetch('/api/upload', { method: 'POST', body: form });
-        const data = await res.json();
-        status.textContent = data.message || '✅ Upload complete';
-        refreshStatus();
-        setTimeout(() => status.classList.add('hidden'), 4000);
-      } catch(e) {
-        status.textContent = '❌ Upload failed: ' + e.message;
-      }
-    }
-  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

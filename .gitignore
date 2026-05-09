@@ -1,19 +1,18 @@
-# Invoice PDFs
-invoices/
-Clients/
-Input/
-Output/
-
-# Output tracker (contains financial data)
-*Updated*.xlsx
-*updated*.xlsx
-
-# Keep the template tracker but ignore processed outputs
-# If you also want to ignore the source tracker:
-ACCT-108 Master Invoice Tracker 2026.xlsx
-
-# Python cache
+# .gitignore
 __pycache__/
 *.pyc
-*.pyo
+*.pdf
+*.xlsx
+*.json
+credentials.json
+drive_config.json
+invoices/*
+!invoices/.gitkeep
+Input/*
+!Input/.gitkeep
+Output/*
+!Output/.gitkeep
+Clients/*
+!Clients/.gitkeep
 .env
+venv/
