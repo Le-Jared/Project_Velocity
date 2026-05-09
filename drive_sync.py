@@ -8,6 +8,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 CLIENTS_FOLDER = "./Clients"
 CREDENTIALS    = "credentials.json"
+TOKEN_FILE     = "token.json"
 DRIVE_CONFIG   = "drive_config.json"
 SCOPES         = ["https://www.googleapis.com/auth/drive"]
 
@@ -25,10 +26,57 @@ def get_drive_folder_id():
     return folder_id
 
 
+def is_service_account(creds_path):
+    """Returns True if credentials.json is a service account key."""
+    try:
+        with open(creds_path) as f:
+            data = json.load(f)
+        return data.get("type") == "service_account"
+    except Exception:
+        return False
+
+
 def get_service():
-    from google.oauth2 import service_account
+    """Build Drive service using service account OR OAuth, auto-detected."""
+    if is_service_account(CREDENTIALS):
+        print("[AUTH] Detected: Service Account")
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        creds = service_account.Credentials.from_service_account_file(
+            CREDENTIALS, scopes=SCOPES
+        )
+        return build("drive", "v3", credentials=creds)
+    else:
+        print("[AUTH] Detected: OAuth 2.0 (personal account)")
+        return get_oauth_service()
+
+
+def get_oauth_service():
+    """OAuth 2.0 flow — opens browser on first run, reuses token.json after."""
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
-    creds = service_account.Credentials.from_service_account_file(CREDENTIALS, scopes=SCOPES)
+
+    creds = None
+
+    if os.path.exists(TOKEN_FILE):
+        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            print("[AUTH] Refreshing OAuth token…")
+            creds.refresh(Request())
+        else:
+            print("[AUTH] Opening browser for Google sign-in…")
+            print("[AUTH] Sign in with the Google account that owns the target Drive folder.")
+            flow  = InstalledAppFlow.from_client_secrets_file(CREDENTIALS, SCOPES)
+            creds = flow.run_local_server(port=0, open_browser=True)
+
+        with open(TOKEN_FILE, "w") as f:
+            f.write(creds.to_json())
+        print(f"[AUTH] Token saved to {TOKEN_FILE} — won't need to sign in again.")
+
     return build("drive", "v3", credentials=creds)
 
 
@@ -57,8 +105,8 @@ def get_or_create_folder(service, name, parent_id, shared_drive_id=None):
         includeItemsFromAllDrives=True,
     )
     if shared_drive_id:
-        list_kwargs["corpora"]  = "drive"
-        list_kwargs["driveId"]  = shared_drive_id
+        list_kwargs["corpora"] = "drive"
+        list_kwargs["driveId"] = shared_drive_id
 
     results = service.files().list(**list_kwargs).execute()
     items   = results.get("files", [])
@@ -115,7 +163,7 @@ def sync_clients_folder(service, root_folder_id, shared_drive_id):
     if shared_drive_id:
         print(f"[INFO] Shared Drive detected → ID: {shared_drive_id}")
     else:
-        print(f"[INFO] No Shared Drive detected — using My Drive folder")
+        print(f"[INFO] My Drive folder — no Shared Drive")
 
     total_uploaded = 0
     total_skipped  = 0
@@ -157,9 +205,9 @@ if __name__ == "__main__":
         print("[ERR]  Clients/ folder not found — run the invoice sorter first.")
         sys.exit(1)
     try:
-        root_folder_id   = get_drive_folder_id()
-        service          = get_service()
-        shared_drive_id  = get_shared_drive_id(service, root_folder_id)
+        root_folder_id  = get_drive_folder_id()
+        service         = get_service()
+        shared_drive_id = get_shared_drive_id(service, root_folder_id)
         sync_clients_folder(service, root_folder_id, shared_drive_id)
     except Exception as e:
         print(f"[ERR]  {e}")

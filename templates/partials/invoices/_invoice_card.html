@@ -1,0 +1,83 @@
+<div class="card-invoice rounded-2xl p-6 flex flex-col gap-5">
+
+  <div class="flex items-center gap-3">
+    <div class="w-12 h-12 rounded-2xl bg-white bg-opacity-10 flex items-center justify-center text-2xl">🧾</div>
+    <div>
+      <h2 class="text-xl font-extrabold">Invoices</h2>
+      <p class="text-xs text-sky-300">Extract · Sort · Track</p>
+    </div>
+  </div>
+
+  <!-- Bubble stats -->
+  <div class="grid grid-cols-3 gap-2">
+    <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
+      <p class="text-xl font-black">4</p><p class="text-xs text-gray-400 mt-0.5">Suppliers</p>
+    </div>
+    <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
+      <p class="text-xl font-black" id="bubble-pdfs">—</p><p class="text-xs text-gray-400 mt-0.5">Invoices</p>
+    </div>
+    <div id="drive-mini-badge" class="bg-gray-700 bg-opacity-40 border border-gray-600 border-opacity-30 rounded-xl p-3 text-center">
+      <p class="text-xl font-black">☁️</p>
+      <p class="text-xs text-gray-400 mt-0.5" id="drive-mini-label">Not Connected</p>
+    </div>
+  </div>
+
+  <!-- Extraction Summary -->
+  <div class="space-y-3">
+    <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">Extraction Summary</p>
+
+    <div id="summary-empty" class="bg-black bg-opacity-20 rounded-xl px-4 py-6 text-center">
+      <p class="text-2xl mb-2">📭</p>
+      <p class="text-sm text-gray-500 font-semibold">No data yet</p>
+      <p class="text-xs text-gray-600 mt-1">Run the workflow to see extraction results here</p>
+    </div>
+
+    <div id="summary-data" class="hidden space-y-3">
+      <div class="bg-black bg-opacity-20 rounded-xl p-4">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Total Amount by Currency</p>
+        <div id="currency-totals-grid" class="grid grid-cols-2 gap-2"></div>
+      </div>
+      <div class="bg-black bg-opacity-20 rounded-xl p-4">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">By Supplier (Number of Invoices)</p>
+        <div class="space-y-2">
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-400 w-20 flex-shrink-0">Meta</span>
+            <div class="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
+              <div id="bar-meta" class="h-2 rounded-full bg-blue-500 transition-all duration-700" style="width:0%"></div>
+            </div>
+            <span id="count-meta" class="text-xs font-bold text-white w-12 text-right">0</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-400 w-20 flex-shrink-0">Google</span>
+            <div class="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
+              <div id="bar-google" class="h-2 rounded-full bg-green-500 transition-all duration-700" style="width:0%"></div>
+            </div>
+            <span id="count-google" class="text-xs font-bold text-white w-12 text-right">0</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-400 w-20 flex-shrink-0">Apple</span>
+            <div class="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
+              <div id="bar-apple" class="h-2 rounded-full bg-gray-300 transition-all duration-700" style="width:0%"></div>
+            </div>
+            <span id="count-apple" class="text-xs font-bold text-white w-12 text-right">0</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-400 w-20 flex-shrink-0">AdsJoy</span>
+            <div class="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
+              <div id="bar-adsjoy" class="h-2 rounded-full bg-orange-400 transition-all duration-700" style="width:0%"></div>
+            </div>
+            <span id="count-adsjoy" class="text-xs font-bold text-white w-12 text-right">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run Buttons -->
+  <div class="grid grid-cols-2 gap-2">
+    <button id="btn-workflow" onclick="runStream('workflow')" class="btn-action col-span-2 py-3 rounded-xl bg-sky-600 text-white font-bold text-sm">▶ Run Full Workflow</button>
+    <button id="btn-extract" onclick="runStream('extract')" class="btn-action py-2.5 rounded-xl bg-gray-700 text-white font-semibold text-xs">Extract Only</button>
+    <button id="btn-sort"    onclick="runStream('sort')"    class="btn-action py-2.5 rounded-xl bg-gray-700 text-white font-semibold text-xs">Sort Only</button>
+  </div>
+
+</div>

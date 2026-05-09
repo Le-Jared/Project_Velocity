@@ -1,0 +1,62 @@
+<!-- ── Stat Cards ── -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+    <p class="text-2xl font-black text-white" id="stat-pdfs">—</p>
+    <p class="text-xs text-gray-500 mt-1">PDFs in /invoices</p>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+    <p class="text-2xl font-black text-white" id="stat-clients">—</p>
+    <p class="text-xs text-gray-500 mt-1">Client Folders</p>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center flex flex-col items-center justify-center gap-1.5">
+    <p class="text-sm font-bold" id="stat-tracker">—</p>
+    <p class="text-xs text-gray-500">Master Tracker</p>
+    <input type="file" id="tracker-input" accept=".xlsx" class="hidden" onchange="uploadTracker(this.files[0])" />
+    <div id="tracker-upload-status" class="text-xs text-indigo-300 hidden"></div>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center flex flex-col items-center justify-center gap-1.5">
+    <p class="text-sm font-bold" id="stat-report">—</p>
+    <p class="text-xs text-gray-500">Sort Report</p>
+    <button id="btn-download-report" onclick="downloadReport()" class="text-xs text-sky-400 hover:text-sky-300 underline underline-offset-2 transition hidden">⬇ Download CSV</button>
+    <p id="report-na" class="text-xs text-gray-600">Run sort first</p>
+  </div>
+</div>
+
+<!-- ── Master Tracker Banner ── -->
+<div class="bg-gray-900 border border-indigo-800 border-opacity-50 rounded-2xl p-5 flex items-start gap-4">
+  <div class="w-9 h-9 rounded-xl bg-indigo-500 bg-opacity-10 flex items-center justify-center text-lg flex-shrink-0">📂</div>
+  <div class="flex-1">
+    <p class="text-sm font-bold text-white mb-1">Master Tracker — Required Before Running</p>
+    <p class="text-xs text-gray-400 leading-relaxed">
+      The workflow requires your Master Tracker <code class="text-indigo-300 bg-gray-800 px-1 rounded">.xlsx</code> to be uploaded to
+      <code class="text-indigo-300 bg-gray-800 px-1 rounded">Input/</code> before extracting or sorting.
+      It is used to load existing sheet headers, carry forward all previous invoice rows, and deduplicate against already-recorded invoice numbers.
+    </p>
+    <div class="mt-3 flex items-center gap-3 flex-wrap">
+      <div class="flex items-center gap-2 text-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+        <span class="text-indigo-400">📁</span>
+        <span class="text-gray-300 font-mono">Input/ACCT-108 Master Invoice Tracker 2026.xlsx</span>
+      </div>
+      <button onclick="document.getElementById('tracker-input').click()" class="btn-action px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition">⬆ Upload Tracker to Input/</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Clear Workspace Banner ── -->
+<div class="bg-gray-900 border border-red-900 border-opacity-50 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
+  <div class="flex items-start gap-3">
+    <div class="w-9 h-9 rounded-xl bg-red-500 bg-opacity-10 flex items-center justify-center text-lg flex-shrink-0">🗑️</div>
+    <div>
+      <p class="text-sm font-bold text-white">Clear Workspace</p>
+      <p class="text-xs text-gray-400 mt-0.5">
+        Permanently wipes <code class="text-red-300">invoices/</code>, <code class="text-red-300">Clients/</code>,
+        <code class="text-red-300">Output/</code> and the Master Tracker in <code class="text-red-300">Input/</code>.
+        <span class="text-yellow-400 font-semibold">Download your tracker first.</span>
+      </p>
+    </div>
+  </div>
+  <div class="flex items-center gap-3 flex-shrink-0">
+    <div id="clear-workspace-status" class="text-xs hidden"></div>
+    <button id="btn-clear-workspace" onclick="openClearModal()" class="btn-action px-5 py-2.5 rounded-xl bg-red-800 hover:bg-red-700 border border-red-700 border-opacity-60 text-red-200 font-bold text-xs whitespace-nowrap transition">🗑️ Clear Invoices &amp; Output</button>
+  </div>
+</div>

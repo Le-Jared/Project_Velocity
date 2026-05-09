@@ -2,7 +2,8 @@ import os
 import re
 import json
 import pathlib
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL    = "gemini-1.5-flash"
@@ -16,11 +17,8 @@ def _get_client():
     global _client
     if _client is None:
         if not GEMINI_API_KEY:
-            raise RuntimeError(
-                "[GEMINI] GEMINI_API_KEY not set."
-            )
-        genai.configure(api_key=GEMINI_API_KEY)
-        _client = genai.GenerativeModel(GEMINI_MODEL)
+            raise RuntimeError("[GEMINI] GEMINI_API_KEY not set.")
+        _client = genai.Client(api_key=GEMINI_API_KEY)
     return _client
 
 
@@ -69,18 +67,24 @@ Rules:
 
 
 def _call_text(prompt: str) -> dict:
-    model    = _get_client()
-    response = model.generate_content(prompt)
+    client   = _get_client()
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+    )
     return _parse_json(response.text)
 
 
 def _call_pdf(pdf_path: str, prompt: str) -> dict:
-    model     = _get_client()
-    pdf_data  = pathlib.Path(pdf_path).read_bytes()
-    response  = model.generate_content([
-        {"mime_type": "application/pdf", "data": pdf_data},
-        prompt,
-    ])
+    client   = _get_client()
+    pdf_data = pathlib.Path(pdf_path).read_bytes()
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[
+            types.Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
+            prompt,
+        ],
+    )
     return _parse_json(response.text)
 
 
@@ -116,9 +120,9 @@ def resolve_unknown_fields(
         print("  [GEMINI] API key not configured — skipping")
         return {}
 
-    use_pdf  = pdf_path and len(text.strip()) < MIN_TEXT_LENGTH
-    mode     = "PDF" if use_pdf else "text"
-    prompt   = _build_prompt(supplier, fields, text if not use_pdf else "")
+    use_pdf = pdf_path and len(text.strip()) < MIN_TEXT_LENGTH
+    mode    = "PDF" if use_pdf else "text"
+    prompt  = _build_prompt(supplier, fields, text if not use_pdf else "")
 
     print(f"  [GEMINI] Resolving {fields} via {mode} for [{supplier.upper()}]...")
 

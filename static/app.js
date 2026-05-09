@@ -544,3 +544,38 @@ async function downloadTracker() {
     btn.innerHTML = orig;
   }
 }
+
+function openDriveSetupModal(tab = 'oauth') {
+  const modal = document.getElementById('drive-setup-modal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  switchDriveTab(tab);
+}
+
+function closeDriveSetupModal() {
+  const modal = document.getElementById('drive-setup-modal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function switchDriveTab(tab) {
+  const oauthContent = document.getElementById('modal-tab-oauth');
+  const saContent    = document.getElementById('modal-tab-sa');
+  const oauthBtn     = document.getElementById('modal-tab-oauth-btn');
+  const saBtn        = document.getElementById('modal-tab-sa-btn');
+
+  const isOAuth = tab === 'oauth';
+
+  oauthContent.classList.toggle('hidden', !isOAuth);
+  saContent.classList.toggle('hidden',     isOAuth);
+
+  oauthBtn.className = 'flex-1 py-3 text-xs font-bold transition border-b-2 '
+    + (isOAuth
+      ? 'border-blue-500 text-blue-400 bg-blue-500 bg-opacity-5'
+      : 'border-transparent text-gray-500 hover:text-gray-300');
+
+  saBtn.className = 'flex-1 py-3 text-xs font-bold transition border-b-2 '
+    + (!isOAuth
+      ? 'border-purple-500 text-purple-400 bg-purple-500 bg-opacity-5'
+      : 'border-transparent text-gray-500 hover:text-gray-300');
+}

@@ -1,0 +1,64 @@
+<div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+  <div class="flex items-center gap-3 mb-5">
+    <div class="w-10 h-10 rounded-xl bg-indigo-500 bg-opacity-10 flex items-center justify-center text-xl flex-shrink-0">⬇️</div>
+    <div><h3 class="font-bold text-white">Downloads</h3><p class="text-xs text-gray-400">Export sorted files and updated tracker to your computer</p></div>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+    <!-- Clients ZIP -->
+    <div class="bg-gray-800 rounded-xl p-4 flex flex-col gap-3">
+      <div class="flex items-center gap-2">
+        <span class="text-lg">📁</span>
+        <div><p class="text-sm font-bold text-white">Clients Folder</p><p class="text-xs text-gray-400">All sorted invoices as a ZIP archive</p></div>
+      </div>
+      <div class="bg-gray-900 rounded-lg px-3 py-2.5 font-mono text-xs leading-relaxed text-gray-400 border border-gray-700">
+        <p class="text-gray-500 mb-1">📦 Clients.zip structure:</p>
+        <p><span class="text-indigo-400">Clients/</span></p>
+        <p>&nbsp;&nbsp;<span class="text-sky-400">└── {CLIENT}/</span><span class="text-gray-600 ml-1 font-sans text-xs">e.g. BHC, MF, GT</span></p>
+        <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-green-400">└── {MARKET}/</span><span class="text-gray-600 ml-1 font-sans text-xs">e.g. SG, MY, ID</span></p>
+        <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-yellow-400">└── {YEAR}/</span><span class="text-gray-600 ml-1 font-sans text-xs">e.g. 2026</span></p>
+        <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-orange-400">└── {MONTH}/</span><span class="text-gray-600 ml-1 font-sans text-xs">e.g. March</span></p>
+        <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-white text-xs">└── file.pdf</span></p>
+      </div>
+      <div class="bg-gray-900 rounded-lg px-3 py-2 border border-gray-700">
+        <p class="text-xs text-gray-500 mb-1.5 font-semibold uppercase tracking-wide">Example filename</p>
+        <code class="text-xs text-green-400 break-all">BHC_Meta_SG_MAR26_2230265437.pdf</code>
+        <div class="mt-2 flex flex-wrap gap-1">
+          <span class="text-xs bg-gray-700 text-sky-300 px-1.5 py-0.5 rounded">BHC = Client</span>
+          <span class="text-xs bg-gray-700 text-purple-300 px-1.5 py-0.5 rounded">Meta = Supplier</span>
+          <span class="text-xs bg-gray-700 text-green-300 px-1.5 py-0.5 rounded">SG = Market</span>
+          <span class="text-xs bg-gray-700 text-yellow-300 px-1.5 py-0.5 rounded">MAR26 = Month</span>
+          <span class="text-xs bg-gray-700 text-orange-300 px-1.5 py-0.5 rounded">2230265437 = Invoice #</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-500"><span id="clients-zip-count" class="font-semibold text-white">—</span> client folders</span>
+      </div>
+      <button id="btn-download-clients" onclick="downloadClientsZip()" class="btn-action w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs">⬇ Download Clients.zip</button>
+      <div id="clients-zip-dl-status" class="text-xs hidden"></div>
+    </div>
+
+    <!-- Tracker -->
+    <div class="bg-gray-800 rounded-xl p-4 flex flex-col gap-3">
+      <div class="flex items-center gap-2">
+        <span class="text-lg">📊</span>
+        <div><p class="text-sm font-bold text-white">Master Invoice Tracker</p><p class="text-xs text-gray-400">Updated .xlsx with all extracted invoice data</p></div>
+      </div>
+      <div class="bg-gray-900 rounded-lg px-3 py-2.5 font-mono text-xs leading-relaxed text-gray-400 border border-gray-700">
+        <p class="text-gray-500 mb-1">📋 Tracker sheets:</p>
+        <p><span class="text-white">📄</span> <span class="text-blue-300">Summary</span><span class="text-gray-600 font-sans ml-1">— totals by currency &amp; supplier</span></p>
+        <p><span class="text-white">📄</span> <span class="text-indigo-300">Adsjoy</span><span class="text-gray-600 font-sans ml-1">— AdsJoy invoices</span></p>
+        <p><span class="text-white">📄</span> <span class="text-gray-300">Apple (ASA)</span><span class="text-gray-600 font-sans ml-1">— Apple Search Ads</span></p>
+        <p><span class="text-white">📄</span> <span class="text-blue-400">Google</span><span class="text-gray-600 font-sans ml-1">— Google Ads invoices</span></p>
+        <p><span class="text-white">📄</span> <span class="text-blue-500">Meta (facebook)</span><span class="text-gray-600 font-sans ml-1">— Meta invoices</span></p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-500">Status: </span>
+        <span id="tracker-dl-status-text" class="text-xs font-semibold text-gray-400">—</span>
+      </div>
+      <button id="btn-download-tracker" onclick="downloadTracker()" class="btn-action w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">⬇ Download Tracker.xlsx</button>
+      <div id="tracker-dl-status" class="text-xs hidden"></div>
+    </div>
+
+  </div>
+</div>
