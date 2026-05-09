@@ -13,9 +13,6 @@ from run_workflow import BASE_DIR
 
 app = Flask(__name__)
 
-# -----------------------------------------------------------------
-# PATHS
-# -----------------------------------------------------------------
 INVOICE_FOLDER = "./invoices"
 INPUT_FOLDER   = "./Input"
 OUTPUT_FOLDER  = "./Output"
@@ -29,11 +26,10 @@ DRIVE_CONFIG   = "drive_config.json"
 
 ALLOWED_EXTENSIONS = {"pdf"}
 
-# -----------------------------------------------------------------
-# HELPERS
-# -----------------------------------------------------------------
+
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 def stream_script(script_name, q):
     try:
@@ -49,6 +45,7 @@ def stream_script(script_name, q):
     except Exception as e:
         q.put(f"[ERR] Failed to start {script_name}: {e}")
         q.put("__EXIT__1")
+
 
 def run_and_stream(script_name):
     q = queue.Queue()
@@ -75,16 +72,12 @@ def run_and_stream(script_name):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-# -----------------------------------------------------------------
-# UI
-# -----------------------------------------------------------------
+
 @app.route("/")
 def index():
     return render_template("index.html")
 
-# -----------------------------------------------------------------
-# STATUS
-# -----------------------------------------------------------------
+
 @app.route("/api/status")
 def status():
     pdf_count = 0
@@ -93,11 +86,22 @@ def status():
             pdf_count += sum(1 for f in files if f.lower().endswith(".pdf"))
 
     client_folders = 0
+    client_list    = []
     if os.path.exists(CLIENTS_FOLDER):
-        client_folders = len([
-            d for d in os.listdir(CLIENTS_FOLDER)
-            if os.path.isdir(os.path.join(CLIENTS_FOLDER, d))
-        ])
+        client_list    = [d for d in os.listdir(CLIENTS_FOLDER) if os.path.isdir(os.path.join(CLIENTS_FOLDER, d))]
+        client_folders = len(client_list)
+
+    supplier_counts = {"Meta": 0, "Google": 0, "Apple": 0, "AdsJoy": 0}
+    if os.path.exists(CLIENTS_FOLDER):
+        for root, _, files in os.walk(CLIENTS_FOLDER):
+            for f in files:
+                if not f.lower().endswith(".pdf"):
+                    continue
+                fl = f.lower()
+                if "_meta_"   in fl: supplier_counts["Meta"]   += 1
+                elif "_google_" in fl: supplier_counts["Google"] += 1
+                elif "_apple_"  in fl: supplier_counts["Apple"]  += 1
+                elif "_adsjoy_" in fl: supplier_counts["AdsJoy"] += 1
 
     tracker_exists = os.path.exists(TRACKER_INPUT) or os.path.exists(TRACKER_OUTPUT)
     report_exists  = os.path.exists(REPORT_PATH)
@@ -113,17 +117,17 @@ def status():
             folder_id_set = False
 
     return jsonify({
-        "pdf_count":      pdf_count,
-        "client_folders": client_folders,
-        "tracker_exists": tracker_exists,
-        "report_exists":  report_exists,
-        "creds_exists":   creds_exists,
-        "folder_id_set":  folder_id_set,
+        "pdf_count":       pdf_count,
+        "client_folders":  client_folders,
+        "client_list":     client_list,
+        "supplier_counts": supplier_counts,
+        "tracker_exists":  tracker_exists,
+        "report_exists":   report_exists,
+        "creds_exists":    creds_exists,
+        "folder_id_set":   folder_id_set,
     })
 
-# -----------------------------------------------------------------
-# UPLOAD — PDFs
-# -----------------------------------------------------------------
+
 @app.route("/api/upload", methods=["POST"])
 def upload():
     if "files" not in request.files:
@@ -142,9 +146,7 @@ def upload():
         "saved": saved, "errors": errors,
     })
 
-# -----------------------------------------------------------------
-# UPLOAD — Master Tracker
-# -----------------------------------------------------------------
+
 @app.route("/api/upload/tracker", methods=["POST"])
 def upload_tracker():
     if "file" not in request.files:
@@ -156,9 +158,7 @@ def upload_tracker():
     f.save(TRACKER_INPUT)
     return jsonify({"message": "[OK] Tracker uploaded to Input/ folder"})
 
-# -----------------------------------------------------------------
-# UPLOAD — credentials.json
-# -----------------------------------------------------------------
+
 @app.route("/api/upload/credentials", methods=["POST"])
 def upload_credentials():
     if "file" not in request.files:
@@ -169,9 +169,7 @@ def upload_credentials():
     f.save(CREDENTIALS)
     return jsonify({"message": "[OK] credentials.json saved to project root"})
 
-# -----------------------------------------------------------------
-# DELETE — credentials.json
-# -----------------------------------------------------------------
+
 @app.route("/api/credentials/delete", methods=["POST"])
 def delete_credentials():
     if os.path.exists(CREDENTIALS):
@@ -179,15 +177,14 @@ def delete_credentials():
         return jsonify({"message": "[OK] credentials.json removed"})
     return jsonify({"message": "[WARN] No credentials file found"}), 404
 
-# -----------------------------------------------------------------
-# DRIVE CONFIG — Get / Save / Delete
-# -----------------------------------------------------------------
+
 @app.route("/api/drive/config", methods=["GET"])
 def get_drive_config():
     if not os.path.exists(DRIVE_CONFIG):
         return jsonify({"root_folder_id": ""})
     with open(DRIVE_CONFIG) as f:
         return jsonify(json.load(f))
+
 
 @app.route("/api/drive/config", methods=["POST"])
 def save_drive_config():
@@ -199,127 +196,112 @@ def save_drive_config():
         json.dump({"root_folder_id": folder_id}, f)
     return jsonify({"message": f"[OK] Drive folder ID saved: {folder_id}"})
 
+
 @app.route("/api/drive/config/delete", methods=["POST"])
 def delete_drive_config():
     if os.path.exists(DRIVE_CONFIG):
         os.remove(DRIVE_CONFIG)
     return jsonify({"message": "[OK] Drive folder ID cleared"})
 
-# -----------------------------------------------------------------
-# DOWNLOAD — Sort Report CSV
-# -----------------------------------------------------------------
+
 @app.route("/api/download/report")
 def download_report():
     if not os.path.exists(REPORT_PATH):
         return jsonify({"error": "Report not found"}), 404
     return send_file(REPORT_PATH, as_attachment=True, download_name="invoice_sort_report.csv")
 
-# -----------------------------------------------------------------
-# DOWNLOAD — Clients folder as ZIP
-# -----------------------------------------------------------------
+
 @app.route("/api/download/clients-zip")
 def download_clients_zip():
     if not os.path.exists(CLIENTS_FOLDER):
         return jsonify({"error": "Clients/ folder not found. Run the workflow first."}), 404
-
-    # Check folder is not empty
-    has_files = any(
-        files
-        for _, _, files in os.walk(CLIENTS_FOLDER)
-    )
+    has_files = any(files for _, _, files in os.walk(CLIENTS_FOLDER))
     if not has_files:
         return jsonify({"error": "Clients/ folder is empty. Run the workflow first."}), 404
-
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for dirpath, dirnames, filenames in os.walk(CLIENTS_FOLDER):
             for filename in filenames:
                 file_path = os.path.join(dirpath, filename)
-                # Preserve folder structure inside zip starting from "Clients/"
                 arcname   = os.path.relpath(file_path, os.path.dirname(CLIENTS_FOLDER))
                 zf.write(file_path, arcname)
     zip_buffer.seek(0)
+    return send_file(zip_buffer, mimetype="application/zip", as_attachment=True, download_name="Clients.zip")
 
-    return send_file(
-        zip_buffer,
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name="Clients.zip"
-    )
 
-@app.route('/api/clear/workspace', methods=['POST'])
+@app.route("/api/clear/workspace", methods=["POST"])
 def clear_workspace():
     import shutil
-
-    deleted = {'invoices': 0, 'client_files': 0, 'output_files': 0}
+    deleted = {"invoices": 0, "client_files": 0, "output_files": 0, "input_files": 0}
     errors  = []
 
-    # 1. Clear /invoices/ — delete all PDFs
-    invoices_dir = os.path.join(BASE_DIR, 'invoices')
+    invoices_dir = os.path.join(BASE_DIR, "invoices")
     if os.path.exists(invoices_dir):
         for f in os.listdir(invoices_dir):
-            if f.lower().endswith('.pdf'):
+            if f.lower().endswith(".pdf"):
                 try:
                     os.remove(os.path.join(invoices_dir, f))
-                    deleted['invoices'] += 1
+                    deleted["invoices"] += 1
                 except Exception as e:
                     errors.append(str(e))
 
-    # 2. Clear /Clients/ — wipe all subfolders
-    clients_dir = os.path.join(BASE_DIR, 'Clients')
+    clients_dir = os.path.join(BASE_DIR, "Clients")
     if os.path.exists(clients_dir):
         for item in os.listdir(clients_dir):
+            if item == ".gitkeep":
+                continue
             item_path = os.path.join(clients_dir, item)
             try:
-                if os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
-                else:
-                    os.remove(item_path)
-                deleted['client_files'] += 1
+                shutil.rmtree(item_path) if os.path.isdir(item_path) else os.remove(item_path)
+                deleted["client_files"] += 1
             except Exception as e:
                 errors.append(str(e))
 
-    # 3. Clear /Output/ — wipe EVERYTHING including .xlsx
-    output_dir = os.path.join(BASE_DIR, 'Output')
+    output_dir = os.path.join(BASE_DIR, "Output")
     if os.path.exists(output_dir):
         for item in os.listdir(output_dir):
+            if item == ".gitkeep":
+                continue
             item_path = os.path.join(output_dir, item)
             try:
-                if os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
-                else:
-                    os.remove(item_path)
-                deleted['output_files'] += 1
+                shutil.rmtree(item_path) if os.path.isdir(item_path) else os.remove(item_path)
+                deleted["output_files"] += 1
+            except Exception as e:
+                errors.append(str(e))
+
+    input_dir = os.path.join(BASE_DIR, "Input")
+    if os.path.exists(input_dir):
+        for item in os.listdir(input_dir):
+            if item == ".gitkeep":
+                continue
+            item_path = os.path.join(input_dir, item)
+            try:
+                shutil.rmtree(item_path) if os.path.isdir(item_path) else os.remove(item_path)
+                deleted["input_files"] += 1
             except Exception as e:
                 errors.append(str(e))
 
     return jsonify({
-        'message': (
+        "message": (
             f"✓ Cleared {deleted['invoices']} invoice(s), "
             f"{deleted['client_files']} client folder(s), "
-            f"{deleted['output_files']} output file(s)."
+            f"{deleted['output_files']} output file(s), "
+            f"{deleted['input_files']} input file(s)."
         ),
-        'deleted': deleted,
-        'errors':  errors
+        "deleted": deleted,
+        "errors":  errors,
     }), 200
 
 
 @app.route("/api/download/tracker")
 def download_tracker():
-    # Prefer the updated output version, fall back to the input version
     if os.path.exists(TRACKER_OUTPUT):
-        path = TRACKER_OUTPUT
-        name = "ACCT-108 Master Invoice Tracker 2026 - Updated.xlsx"
+        return send_file(TRACKER_OUTPUT, as_attachment=True, download_name="ACCT-108 Master Invoice Tracker 2026 - Updated.xlsx")
     elif os.path.exists(TRACKER_INPUT):
-        path = TRACKER_INPUT
-        name = "ACCT-108 Master Invoice Tracker 2026.xlsx"
-    else:
-        return jsonify({"error": "No tracker file found. Upload or run the workflow first."}), 404
-    return send_file(path, as_attachment=True, download_name=name)
+        return send_file(TRACKER_INPUT, as_attachment=True, download_name="ACCT-108 Master Invoice Tracker 2026.xlsx")
+    return jsonify({"error": "No tracker file found. Upload or run the workflow first."}), 404
 
-# -----------------------------------------------------------------
-# STREAMING RUNNERS
-# -----------------------------------------------------------------
+
 @app.route("/api/run/sort")
 def run_sort():     return run_and_stream("invoice_sorter.py")
 
@@ -329,26 +311,16 @@ def run_extract():  return run_and_stream("invoice_extractor.py")
 @app.route("/api/run/workflow")
 def run_workflow(): return run_and_stream("run_workflow.py")
 
-# -----------------------------------------------------------------
-# GOOGLE DRIVE SYNC — streaming
-# -----------------------------------------------------------------
+
 @app.route("/api/drive/sync", methods=["POST"])
 def drive_sync():
     if not os.path.exists(CREDENTIALS):
-        return jsonify({
-            "status":  "not_configured",
-            "message": "[WARN] credentials.json not found. Upload it via the dashboard first.",
-        }), 501
+        return jsonify({"status": "not_configured", "message": "[WARN] credentials.json not found. Upload it via the dashboard first."}), 501
     if not os.path.exists(DRIVE_CONFIG):
-        return jsonify({
-            "status":  "not_configured",
-            "message": "[WARN] Drive folder ID not set. Add it in the Google Drive Sync card.",
-        }), 501
+        return jsonify({"status": "not_configured", "message": "[WARN] Drive folder ID not set. Add it in the Google Drive Sync card."}), 501
     return run_and_stream("drive_sync.py")
 
-# -----------------------------------------------------------------
-# ENTRY POINT
-# -----------------------------------------------------------------
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

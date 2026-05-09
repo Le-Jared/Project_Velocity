@@ -22,6 +22,52 @@ function triggerBlobDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+// ─────────────────────────────────────────────
+// EXTRACTION SUMMARY
+// ─────────────────────────────────────────────
+function updateExtractionSummary(d) {
+  const counts  = d.supplier_counts || {};
+  const clients = d.client_list     || [];
+  const total   = Object.values(counts).reduce((a, b) => a + b, 0);
+  const hasData = total > 0 || clients.length > 0;
+
+  const emptyEl = document.getElementById('summary-empty');
+  const dataEl  = document.getElementById('summary-data');
+  if (!emptyEl || !dataEl) return;
+
+  emptyEl.classList.toggle('hidden', hasData);
+  dataEl.classList.toggle('hidden', !hasData);
+
+  if (!hasData) return;
+
+  document.getElementById('sum-total-invoices').textContent = total;
+  document.getElementById('sum-total-clients').textContent  = clients.length;
+
+  // Supplier bars
+  const max = Math.max(...Object.values(counts), 1);
+  ['meta', 'google', 'apple', 'adsjoy'].forEach(s => {
+    const key   = s === 'adsjoy' ? 'AdsJoy' : s.charAt(0).toUpperCase() + s.slice(1);
+    const count = counts[key] || 0;
+    const countEl = document.getElementById('count-' + s);
+    const barEl   = document.getElementById('bar-' + s);
+    if (countEl) countEl.textContent  = count;
+    if (barEl)   barEl.style.width    = (count / max * 100) + '%';
+  });
+
+  // Client chips
+  const chips = document.getElementById('client-chips');
+  if (chips) {
+    chips.innerHTML = clients.length
+      ? clients.map(c =>
+          `<span class="text-xs bg-gray-700 text-sky-300 px-2.5 py-1 rounded-lg font-semibold">${c}</span>`
+        ).join('')
+      : '<span class="text-xs text-gray-600">No client folders yet</span>';
+  }
+}
+
+// ─────────────────────────────────────────────
+// STATUS REFRESH
+// ─────────────────────────────────────────────
 async function refreshStatus() {
   try {
     const res = await fetch('/api/status');
@@ -79,6 +125,9 @@ async function refreshStatus() {
       btnClients.className = 'btn-action w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs';
     }
 
+    // Extraction summary (new)
+    updateExtractionSummary(d);
+
     // Drive UI
     const fullyConnected = d.creds_exists && d.folder_id_set;
     updateDriveUI(fullyConnected, d.creds_exists, d.folder_id_set);
@@ -94,6 +143,9 @@ async function refreshStatus() {
 refreshStatus();
 setInterval(refreshStatus, 8000);
 
+// ─────────────────────────────────────────────
+// DRIVE UI
+// ─────────────────────────────────────────────
 function updateDriveUI(fullyConnected, credsExists, folderSet) {
   document.getElementById('drive-badge-connected').classList.toggle('hidden', !fullyConnected);
   document.getElementById('drive-badge-connected').classList.toggle('flex',    fullyConnected);
@@ -123,6 +175,9 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
   const feat  = document.getElementById('drive-feature-badge');
   const pipe  = document.getElementById('pipe-drive');
 
+  // Pipeline feature status table badge (new)
+  const pipeBadge = document.getElementById('pipe-drive-badge');
+
   if (fullyConnected) {
     mini.className    = 'bg-green-500 bg-opacity-10 border border-green-500 border-opacity-20 rounded-xl p-3 text-center';
     label.textContent = 'Connected';
@@ -130,6 +185,10 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
     feat.textContent  = 'Live';
     feat.className    = 'text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full';
     pipe.className    = 'pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-900 text-green-300 border border-green-700 border-opacity-50';
+    if (pipeBadge) {
+      pipeBadge.textContent = 'Live';
+      pipeBadge.className   = 'text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full flex-shrink-0';
+    }
   } else {
     mini.className    = 'bg-gray-700 bg-opacity-40 border border-gray-600 border-opacity-30 rounded-xl p-3 text-center';
     label.textContent = 'Not Connected';
@@ -137,6 +196,10 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
     feat.textContent  = 'Not Connected';
     feat.className    = 'text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full';
     pipe.className    = 'pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-900 text-yellow-300 border border-yellow-700 border-opacity-50';
+    if (pipeBadge) {
+      pipeBadge.textContent = 'Not Connected';
+      pipeBadge.className   = 'text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full flex-shrink-0';
+    }
   }
 
   if (fullyConnected) loadFolderIDDisplay();
@@ -352,12 +415,10 @@ async function uploadFiles(files) {
 function openClearModal() {
   const modal  = document.getElementById('clear-modal');
   const status = document.getElementById('clear-modal-status');
-  // Reset state
   status.classList.add('hidden');
   status.textContent = '';
   document.getElementById('btn-clear-confirm').disabled = false;
   document.getElementById('btn-clear-confirm').innerHTML = '🗑️ Yes, Clear Everything';
-  // Show modal
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 }
@@ -388,7 +449,6 @@ async function confirmClearWorkspace() {
       showStatus(banner, '✓ Workspace cleared', 'text-green-400', 5000);
       banner.classList.remove('hidden');
       refreshStatus();
-      // Auto-close modal after short delay
       setTimeout(() => closeClearModal(), 1800);
     } else {
       showStatus(status, '✕ ' + (data.error || 'Clear failed'), 'text-red-400', 0);
