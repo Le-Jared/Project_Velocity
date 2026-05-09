@@ -168,6 +168,8 @@ async function refreshStatus() {
 
   } catch (e) {
     document.getElementById('server-status').textContent = 'Server unreachable';
+    document.getElementById('last-refresh').textContent =
+      'Failed ' + new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
 }
 
@@ -200,7 +202,7 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
 
   const mini      = document.getElementById('drive-mini-badge');
   const label     = document.getElementById('drive-mini-label');
-  const feat      = document.getElementById('drive-feature-badge');
+  const feat      = document.getElementById('drive-feature-badge');  // may be null — guarded below
   const pipe      = document.getElementById('pipe-drive');
   const pipeBadge = document.getElementById('pipe-drive-badge');
 
@@ -208,8 +210,7 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
     mini.className    = 'bg-green-500 bg-opacity-10 border border-green-500 border-opacity-20 rounded-xl p-3 text-center';
     label.textContent = 'Connected';
     label.className   = 'text-xs text-green-400 mt-0.5';
-    feat.textContent  = 'Live';
-    feat.className    = 'text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full';
+    if (feat) { feat.textContent = 'Live'; feat.className = 'text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full'; }
     pipe.className    = 'pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-900 text-green-300 border border-green-700 border-opacity-50';
     if (pipeBadge) {
       pipeBadge.textContent = 'Live';
@@ -219,8 +220,7 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
     mini.className    = 'bg-gray-700 bg-opacity-40 border border-gray-600 border-opacity-30 rounded-xl p-3 text-center';
     label.textContent = 'Not Connected';
     label.className   = 'text-xs text-gray-400 mt-0.5';
-    feat.textContent  = 'Not Connected';
-    feat.className    = 'text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full';
+    if (feat) { feat.textContent = 'Not Connected'; feat.className = 'text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full'; }
     pipe.className    = 'pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-900 text-yellow-300 border border-yellow-700 border-opacity-50';
     if (pipeBadge) {
       pipeBadge.textContent = 'Not Connected';
