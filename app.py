@@ -31,6 +31,27 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def gemini_available():
+    """Returns True if a Gemini API key is configured and usable."""
+    # Check environment variable first
+    if os.environ.get("GEMINI_API_KEY", "").strip():
+        return True
+    # Fallback: check .env file in project root
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("GEMINI_API_KEY="):
+                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if val:
+                            return True
+        except Exception:
+            pass
+    return False
+
+
 def stream_script(script_name, q):
     try:
         proc = subprocess.Popen(
@@ -98,7 +119,7 @@ def status():
                 if not f.lower().endswith(".pdf"):
                     continue
                 fl = f.lower()
-                if "_meta_"   in fl: supplier_counts["Meta"]   += 1
+                if "_meta_"     in fl: supplier_counts["Meta"]   += 1
                 elif "_google_" in fl: supplier_counts["Google"] += 1
                 elif "_apple_"  in fl: supplier_counts["Apple"]  += 1
                 elif "_adsjoy_" in fl: supplier_counts["AdsJoy"] += 1
@@ -125,6 +146,7 @@ def status():
         "report_exists":   report_exists,
         "creds_exists":    creds_exists,
         "folder_id_set":   folder_id_set,
+        "gemini":          gemini_available(),
     })
 
 

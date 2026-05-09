@@ -197,12 +197,10 @@
           </div>
 
           <div id="summary-data" class="hidden space-y-3">
-
             <div class="bg-black bg-opacity-20 rounded-xl p-4">
               <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Total Amount by Currency</p>
               <div id="currency-totals-grid" class="grid grid-cols-2 gap-2"></div>
             </div>
-
             <div class="bg-black bg-opacity-20 rounded-xl p-4">
               <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">By Supplier (Number of Invoices)</p>
               <div class="space-y-2">
@@ -236,7 +234,6 @@
                 </div>
               </div>
             </div>
-
           </div>
         </div>
 
@@ -270,8 +267,11 @@
         <div id="log-terminal"><span class="log-dim">$ waiting for command…</span></div>
       </div>
 
+      <!-- ── End-to-End Pipeline ── -->
       <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
         <p class="text-xs font-bold tracking-widest text-gray-600 uppercase mb-4">End-to-End Pipeline</p>
+
+        <!-- Pipeline flow -->
         <div class="flex items-center gap-2 flex-wrap mb-5">
           <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📥 Drop PDFs</div>
           <span class="text-gray-700 font-bold">→</span>
@@ -279,34 +279,75 @@
           <span class="text-gray-700 font-bold">→</span>
           <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📊 Extract Data</div>
           <span class="text-gray-700 font-bold">→</span>
+          <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-900 text-violet-300 border border-violet-700 border-opacity-50">✨ Gemini Fallback</div>
+          <span class="text-gray-700 font-bold">→</span>
           <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📝 Update Tracker</div>
           <span class="text-gray-700 font-bold">→</span>
           <div class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 text-gray-200">📁 Sort Files</div>
           <span class="text-gray-700 font-bold">→</span>
           <div id="pipe-drive" class="pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-900 text-yellow-300 border border-yellow-700 border-opacity-50">☁️ Drive Sync</div>
         </div>
+
+        <!-- Feature Status table -->
         <div class="border-t border-gray-800 pt-4 space-y-0">
           <p class="text-xs font-bold text-gray-600 uppercase tracking-widest mb-3">Feature Status</p>
+
           <div class="flex items-center justify-between py-2 border-b border-gray-800">
-            <div class="flex items-center gap-2 text-xs text-gray-300"><span>🔍</span><span>Supplier Detection</span><span class="text-gray-600">— Auto-identifies Meta, Google, Apple, AdsJoy</span></div>
+            <div class="flex items-center gap-2 text-xs text-gray-300">
+              <span>🔍</span><span>Supplier Detection</span>
+              <span class="text-gray-600">— Auto-identifies Meta, Google, Apple, AdsJoy</span>
+            </div>
             <span class="text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full flex-shrink-0">Live</span>
           </div>
+
           <div class="flex items-center justify-between py-2 border-b border-gray-800">
-            <div class="flex items-center gap-2 text-xs text-gray-300"><span>📊</span><span>Data Extraction</span><span class="text-gray-600">— Pulls client, market, month, amount from PDF</span></div>
+            <div class="flex items-center gap-2 text-xs text-gray-300">
+              <span>📊</span><span>Data Extraction</span>
+              <span class="text-gray-600">— Pulls client, market, month, amount from PDF text</span>
+            </div>
             <span class="text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full flex-shrink-0">Live</span>
           </div>
+
           <div class="flex items-center justify-between py-2 border-b border-gray-800">
-            <div class="flex items-center gap-2 text-xs text-gray-300"><span>🗂️</span><span>Master Tracker Update</span><span class="text-gray-600">— Appends rows to correct sheet in .xlsx</span></div>
+            <div class="flex items-start gap-2 text-xs text-gray-300 flex-1 mr-4">
+              <span class="flex-shrink-0 mt-0.5">✨</span>
+              <div>
+                <span class="font-semibold text-violet-300">Gemini AI Fallback</span>
+                <span class="text-gray-600 ml-1">— Resolves UNKNOWN fields regex couldn't find</span>
+                <div class="mt-1.5 flex flex-wrap gap-1.5">
+                  <span class="text-xs bg-violet-900 bg-opacity-60 text-violet-300 border border-violet-700 border-opacity-40 px-2 py-0.5 rounded-full">Regex first, AI only when needed</span>
+                  <span class="text-xs bg-violet-900 bg-opacity-60 text-violet-300 border border-violet-700 border-opacity-40 px-2 py-0.5 rounded-full">Reads full PDF text</span>
+                  <span class="text-xs bg-violet-900 bg-opacity-60 text-violet-300 border border-violet-700 border-opacity-40 px-2 py-0.5 rounded-full">Native PDF mode for scanned docs</span>
+                </div>
+              </div>
+            </div>
+            <span id="gemini-status-badge" class="text-xs font-semibold bg-violet-500 bg-opacity-20 text-violet-400 px-2 py-0.5 rounded-full flex-shrink-0">Live</span>
+          </div>
+
+          <div class="flex items-center justify-between py-2 border-b border-gray-800">
+            <div class="flex items-center gap-2 text-xs text-gray-300">
+              <span>🗂️</span><span>Master Tracker Update</span>
+              <span class="text-gray-600">— Appends rows to correct sheet in .xlsx</span>
+            </div>
             <span class="text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full flex-shrink-0">Live</span>
           </div>
+
           <div class="flex items-center justify-between py-2 border-b border-gray-800">
-            <div class="flex items-center gap-2 text-xs text-gray-300"><span>📁</span><span>File Sorting</span><span class="text-gray-600">— Renames &amp; moves PDFs to client folders</span></div>
+            <div class="flex items-center gap-2 text-xs text-gray-300">
+              <span>📁</span><span>File Sorting</span>
+              <span class="text-gray-600">— Renames &amp; moves PDFs to client folders</span>
+            </div>
             <span class="text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full flex-shrink-0">Live</span>
           </div>
+
           <div class="flex items-center justify-between py-2">
-            <div class="flex items-center gap-2 text-xs text-gray-300"><span>☁️</span><span>Google Drive Sync</span><span class="text-gray-600">— Push sorted files directly to Drive folders</span></div>
+            <div class="flex items-center gap-2 text-xs text-gray-300">
+              <span>☁️</span><span>Google Drive Sync</span>
+              <span class="text-gray-600">— Push sorted files directly to Drive folders</span>
+            </div>
             <span id="pipe-drive-badge" class="text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full flex-shrink-0">Not Connected</span>
           </div>
+
         </div>
       </div>
 

@@ -90,6 +90,18 @@ function renderSupplierBars(counts) {
   });
 }
 
+function updateGeminiBadge(geminiActive) {
+  const badge = document.getElementById('gemini-status-badge');
+  if (!badge) return;
+  if (geminiActive) {
+    badge.textContent = 'Live';
+    badge.className   = 'text-xs font-semibold bg-violet-500 bg-opacity-20 text-violet-400 px-2 py-0.5 rounded-full flex-shrink-0';
+  } else {
+    badge.textContent = 'No API Key';
+    badge.className   = 'text-xs font-semibold bg-gray-700 text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0';
+  }
+}
+
 async function refreshStatus() {
   try {
     const res = await fetch('/api/status');
@@ -145,6 +157,8 @@ async function refreshStatus() {
 
     _lastSupplierCounts = d.supplier_counts || {};
     refreshSummary();
+
+    updateGeminiBadge(d.gemini ?? false);
 
     const fullyConnected = d.creds_exists && d.folder_id_set;
     updateDriveUI(fullyConnected, d.creds_exists, d.folder_id_set);
