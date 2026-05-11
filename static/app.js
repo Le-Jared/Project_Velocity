@@ -202,7 +202,7 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
 
   const mini      = document.getElementById('drive-mini-badge');
   const label     = document.getElementById('drive-mini-label');
-  const feat      = document.getElementById('drive-feature-badge');  // may be null — guarded below
+  const feat      = document.getElementById('drive-feature-badge');
   const pipe      = document.getElementById('pipe-drive');
   const pipeBadge = document.getElementById('pipe-drive-badge');
 
@@ -420,8 +420,143 @@ async function uploadFiles(files) {
     const data = await res.json();
     showStatus(status, data.message || 'Upload complete', 'text-sky-400', 4000);
     refreshStatus();
+    loadInvoiceList();
   } catch (e) { showStatus(status, '[ERR] Upload failed: ' + e.message, 'text-red-400', 0); }
 }
+
+// ── Invoice List ─────────────────────────────────────────────────────────────
+
+let _selectedInvoices = new Set();
+
+async function loadInvoiceList() {
+  try {
+    const res   = await fetch('/api/invoices');
+    const data  = await res.json();
+    const files = data.files || [];
+
+    const panel    = document.getElementById('invoice-list-panel');
+    const listEl   = document.getElementById('invoice-file-list');
+    const countEl  = document.getElementById('invoice-list-count');
+
+    // Clear stale selections
+    _selectedInvoices.clear();
+    updateDeleteButton();
+
+    if (files.length === 0) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    countEl.textContent = files.length;
+
+    listEl.innerHTML = files.map(filename => `
+      <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800 transition group" id="row-${CSS.escape(filename)}">
+        <input
+          type="checkbox"
+          class="invoice-checkbox w-3.5 h-3.5 rounded accent-red-500 cursor-pointer flex-shrink-0"
+          value="${filename}"
+          onchange="onInvoiceCheckbox(this)"
+        />
+        <span class="text-red-400 text-xs flex-shrink-0">📄</span>
+        <span class="text-xs text-gray-300 font-mono truncate flex-1" title="${filename}">${filename}</span>
+        <button
+          onclick="deleteSingleInvoice('${filename}')"
+          class="opacity-0 group-hover:opacity-100 text-xs text-gray-600 hover:text-red-400 transition px-1.5 py-0.5 rounded hover:bg-red-500 hover:bg-opacity-10 flex-shrink-0"
+          title="Delete ${filename}">
+          ✕
+        </button>
+      </div>
+    `).join('');
+
+  } catch (e) {}
+}
+
+function onInvoiceCheckbox(checkbox) {
+  if (checkbox.checked) {
+    _selectedInvoices.add(checkbox.value);
+  } else {
+    _selectedInvoices.delete(checkbox.value);
+  }
+  updateDeleteButton();
+}
+
+function updateDeleteButton() {
+  const btn      = document.getElementById('btn-delete-selected');
+  const countEl  = document.getElementById('selected-count');
+  const count    = _selectedInvoices.size;
+  countEl.textContent = count;
+  if (count > 0) {
+    btn.classList.remove('hidden');
+  } else {
+    btn.classList.add('hidden');
+  }
+}
+
+function toggleSelectAll() {
+  const checkboxes = document.querySelectorAll('.invoice-checkbox');
+  const allChecked = [...checkboxes].every(cb => cb.checked);
+  checkboxes.forEach(cb => {
+    cb.checked = !allChecked;
+    if (cb.checked) {
+      _selectedInvoices.add(cb.value);
+    } else {
+      _selectedInvoices.delete(cb.value);
+    }
+  });
+  const btn = document.getElementById('btn-select-all');
+  btn.textContent = allChecked ? 'Select All' : 'Deselect All';
+  updateDeleteButton();
+}
+
+async function deleteSingleInvoice(filename) {
+  await deleteInvoices([filename]);
+}
+
+async function deleteSelectedInvoices() {
+  if (_selectedInvoices.size === 0) return;
+  await deleteInvoices([..._selectedInvoices]);
+}
+
+async function deleteInvoices(filenames) {
+  const statusEl = document.getElementById('invoice-list-status');
+  const statusP  = statusEl.querySelector('p');
+
+  statusEl.classList.remove('hidden');
+  statusP.className   = 'text-xs text-yellow-400';
+  statusP.textContent = `⏳ Deleting ${filenames.length} file(s)…`;
+
+  try {
+    const res  = await fetch('/api/invoices/delete', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ filenames }),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      statusP.className   = 'text-xs text-green-400';
+      statusP.textContent = `✓ Deleted ${data.deleted.length} file(s)`;
+      setTimeout(() => statusEl.classList.add('hidden'), 3000);
+    } else {
+      statusP.className   = 'text-xs text-red-400';
+      statusP.textContent = `✕ ${data.error || 'Delete failed'}`;
+    }
+
+    _selectedInvoices.clear();
+    loadInvoiceList();
+    refreshStatus();
+
+  } catch (e) {
+    statusP.className   = 'text-xs text-red-400';
+    statusP.textContent = '[ERR] ' + e.message;
+  }
+}
+
+// Load invoice list on page ready
+document.addEventListener('DOMContentLoaded', loadInvoiceList);
+
+// ── End Invoice List ──────────────────────────────────────────────────────────
 
 function openClearModal() {
   const modal  = document.getElementById('clear-modal');
@@ -460,6 +595,7 @@ async function confirmClearWorkspace() {
       showStatus(banner, '✓ Workspace cleared', 'text-green-400', 5000);
       banner.classList.remove('hidden');
       refreshStatus();
+      loadInvoiceList();
       setTimeout(() => closeClearModal(), 1800);
     } else {
       showStatus(status, '✕ ' + (data.error || 'Clear failed'), 'text-red-400', 0);

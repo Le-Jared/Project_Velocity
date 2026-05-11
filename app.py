@@ -33,10 +33,8 @@ def allowed_file(filename):
 
 def gemini_available():
     """Returns True if a Gemini API key is configured and usable."""
-    # Check environment variable first
     if os.environ.get("GEMINI_API_KEY", "").strip():
         return True
-    # Fallback: check .env file in project root
     env_path = os.path.join(os.path.dirname(__file__), ".env")
     if os.path.exists(env_path):
         try:
@@ -245,14 +243,23 @@ def upload():
 
 @app.route("/api/upload/tracker", methods=["POST"])
 def upload_tracker():
+    import shutil
+    from datetime import datetime
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
     f = request.files["file"]
     if not f.filename.endswith(".xlsx"):
         return jsonify({"error": "Only .xlsx files accepted"}), 400
     os.makedirs(INPUT_FOLDER, exist_ok=True)
+    # Backup existing tracker before overwriting
+    if os.path.exists(TRACKER_INPUT):
+        backup_name = os.path.join(
+            INPUT_FOLDER,
+            f"ACCT-108 Master Invoice Tracker 2026_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+        shutil.copy2(TRACKER_INPUT, backup_name)
     f.save(TRACKER_INPUT)
-    return jsonify({"message": "[OK] Tracker uploaded to Input/ folder"})
+    return jsonify({"message": "[OK] Tracker uploaded to Input/ folder (previous version backed up)"})
 
 
 @app.route("/api/upload/credentials", methods=["POST"])
@@ -397,6 +404,55 @@ def download_tracker():
         return send_file(TRACKER_INPUT, as_attachment=True, download_name="ACCT-108 Master Invoice Tracker 2026.xlsx")
     return jsonify({"error": "No tracker file found. Upload or run the workflow first."}), 404
 
+
+# ── Invoice List & Delete ──────────────────────────────────────────────────────
+
+@app.route("/api/invoices", methods=["GET"])
+def list_invoices():
+    """Return a sorted list of all PDF filenames in the invoices/ folder."""
+    if not os.path.exists(INVOICE_FOLDER):
+        return jsonify({"files": []})
+    files = sorted([
+        f for f in os.listdir(INVOICE_FOLDER)
+        if f.lower().endswith(".pdf")
+    ])
+    return jsonify({"files": files})
+
+
+@app.route("/api/invoices/delete", methods=["POST"])
+def delete_invoice():
+    """Delete one or more invoices by filename from the invoices/ folder."""
+    data      = request.get_json() or {}
+    filenames = data.get("filenames", [])
+
+    # Support single filename string as well
+    if isinstance(filenames, str):
+        filenames = [filenames]
+
+    if not filenames:
+        return jsonify({"error": "No filenames provided"}), 400
+
+    deleted, errors = [], []
+    for filename in filenames:
+        safe_name = os.path.basename(secure_filename(filename))
+        path      = os.path.join(INVOICE_FOLDER, safe_name)
+        if not os.path.exists(path):
+            errors.append(f"{filename} not found")
+            continue
+        try:
+            os.remove(path)
+            deleted.append(safe_name)
+        except Exception as e:
+            errors.append(f"{filename}: {str(e)}")
+
+    return jsonify({
+        "message": f"Deleted {len(deleted)} file(s)" + (f", {len(errors)} error(s)" if errors else ""),
+        "deleted": deleted,
+        "errors":  errors,
+    }), 200 if deleted else 400
+
+
+# ── Run Routes ─────────────────────────────────────────────────────────────────
 
 @app.route("/api/run/sort")
 def run_sort():     return run_and_stream("invoice_sorter.py")
