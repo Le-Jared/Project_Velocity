@@ -715,3 +715,366 @@ function switchDriveTab(tab) {
       ? 'border-purple-500 text-purple-400 bg-purple-500 bg-opacity-5'
       : 'border-transparent text-gray-500 hover:text-gray-300');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PRISMA TAB ───────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _selectedPlans = new Set();
+
+// ── Drag & Drop ──────────────────────────────────────────────────────────────
+
+function onPrismaDragOver(e) {
+  e.preventDefault();
+  document.getElementById('prisma-drop-zone').classList.add('drag-over');
+}
+
+function onPrismaDragLeave() {
+  document.getElementById('prisma-drop-zone').classList.remove('drag-over');
+}
+
+function onPrismaDrop(e) {
+  e.preventDefault();
+  document.getElementById('prisma-drop-zone').classList.remove('drag-over');
+  uploadPlans(e.dataTransfer.files);
+}
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+
+async function uploadPlans(files) {
+  if (!files || files.length === 0) return;
+  const status = document.getElementById('prisma-upload-status');
+  showStatus(status, 'Uploading ' + files.length + ' file(s)…', 'text-violet-400', 0);
+
+  const form = new FormData();
+  for (const f of files) form.append('files', f);
+
+  try {
+    const res  = await fetch('/api/prisma/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    showStatus(
+      status,
+      data.message || `✓ Uploaded ${data.count || 0} file(s)`,
+      res.ok ? 'text-green-400' : 'text-red-400',
+      4000
+    );
+    loadPlanList();
+  } catch (e) {
+    showStatus(status, '[ERR] ' + e.message, 'text-red-400', 0);
+  }
+}
+
+// ── Status / Reference Files ─────────────────────────────────────────────────
+
+async function refreshPrismaStatus() {
+  try {
+    const res  = await fetch('/api/prisma/status');
+    const data = await res.json();
+
+    const readyBadge   = document.getElementById('prisma-ready-badge');
+    const guideMeta    = document.getElementById('prisma-guide-meta');
+    const guideState   = document.getElementById('prisma-guide-state');
+    const tmplMeta     = document.getElementById('prisma-template-meta');
+    const tmplState    = document.getElementById('prisma-template-state');
+    const card         = document.getElementById('prisma-guide-card');
+    const hint         = document.getElementById('prisma-guide-hint');
+
+    // Overall readiness pill
+    if (data.ready) {
+      readyBadge.textContent = '✓ Ready';
+      readyBadge.className   = 'text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full flex-shrink-0';
+      card.className         = 'bg-gray-900 border border-green-700 border-opacity-30 rounded-2xl p-5';
+    } else {
+      readyBadge.textContent = '⚠ Setup Needed';
+      readyBadge.className   = 'text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full flex-shrink-0';
+      card.className         = 'bg-gray-900 border border-yellow-700 border-opacity-30 rounded-2xl p-5';
+    }
+
+    // Buying Guide state
+    if (data.guide_loaded) {
+      guideState.textContent = '✓ Loaded';
+      guideState.className   = 'text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full flex-shrink-0';
+      guideMeta.textContent  = `${data.guide_rows} rows · ${(data.clients || []).join(', ')}`;
+    } else if (data.guide_exists) {
+      guideState.textContent = '⚠ Parse Error';
+      guideState.className   = 'text-xs font-semibold bg-orange-500 bg-opacity-20 text-orange-400 px-2 py-0.5 rounded-full flex-shrink-0';
+      guideMeta.textContent  = data.error || 'Failed to load';
+    } else {
+      guideState.textContent = '✕ Missing';
+      guideState.className   = 'text-xs font-semibold bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full flex-shrink-0';
+      guideMeta.textContent  = 'Upload ACCT 108 BuyingGuide.xlsx';
+    }
+
+    // Template state
+    if (data.template_exists) {
+      tmplState.textContent = '✓ Loaded';
+      tmplState.className   = 'text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full flex-shrink-0';
+      tmplMeta.textContent  = 'Digital import sheet ALL TYPES';
+    } else {
+      tmplState.textContent = '✕ Missing';
+      tmplState.className   = 'text-xs font-semibold bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full flex-shrink-0';
+      tmplMeta.textContent  = 'Upload ACCT-108 DIGITAL TEMPLATE...xlsx';
+    }
+
+    hint.textContent = data.ready
+      ? 'Reference files loaded — ready to convert plans.'
+      : 'Both files required to convert plans.';
+
+  } catch (e) {}
+}
+
+// ── Upload Buying Guide ──────────────────────────────────────────────────────
+
+async function uploadBuyingGuide(file) {
+  if (!file) return;
+  const feedback = document.getElementById('prisma-upload-feedback');
+  feedback.classList.remove('hidden');
+  feedback.className   = 'text-xs mt-2 text-center text-violet-400';
+  feedback.textContent = `Uploading ${file.name}…`;
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res  = await fetch('/api/upload/buying-guide', { method: 'POST', body: form });
+    const data = await res.json();
+    feedback.className   = 'text-xs mt-2 text-center ' + (res.ok ? 'text-green-400' : 'text-red-400');
+    feedback.textContent = data.message || (res.ok ? '✓ Uploaded' : data.error);
+    setTimeout(() => feedback.classList.add('hidden'), 5000);
+    refreshPrismaStatus();
+  } catch (e) {
+    feedback.className   = 'text-xs mt-2 text-center text-red-400';
+    feedback.textContent = '[ERR] ' + e.message;
+  }
+}
+
+// ── Upload Prisma Template ───────────────────────────────────────────────────
+
+async function uploadPrismaTemplate(file) {
+  if (!file) return;
+  const feedback = document.getElementById('prisma-upload-feedback');
+  feedback.classList.remove('hidden');
+  feedback.className   = 'text-xs mt-2 text-center text-violet-400';
+  feedback.textContent = `Uploading ${file.name}…`;
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res  = await fetch('/api/upload/prisma-template', { method: 'POST', body: form });
+    const data = await res.json();
+    feedback.className   = 'text-xs mt-2 text-center ' + (res.ok ? 'text-green-400' : 'text-red-400');
+    feedback.textContent = data.message || (res.ok ? '✓ Uploaded' : data.error);
+    setTimeout(() => feedback.classList.add('hidden'), 5000);
+    refreshPrismaStatus();
+  } catch (e) {
+    feedback.className   = 'text-xs mt-2 text-center text-red-400';
+    feedback.textContent = '[ERR] ' + e.message;
+  }
+}
+
+// ── Plan List ────────────────────────────────────────────────────────────────
+
+async function loadPlanList() {
+  try {
+    const res   = await fetch('/api/prisma/plans');
+    const data  = await res.json();
+    const plans = data.plans || [];
+
+    const panel   = document.getElementById('prisma-plan-panel');
+    const list    = document.getElementById('prisma-plan-list');
+    const countEl = document.getElementById('prisma-plan-count');
+
+    _selectedPlans.clear();
+    updatePlanActionButtons();
+
+    if (plans.length === 0) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    countEl.textContent = plans.length;
+
+    list.innerHTML = plans.map(p => `
+      <div class="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-800 transition group border-b border-white border-opacity-5">
+        <input type="checkbox"
+               class="prisma-plan-checkbox w-3.5 h-3.5 rounded accent-violet-500 cursor-pointer flex-shrink-0"
+               value="${p.filename}"
+               onchange="onPlanCheckbox(this)" />
+        <span class="text-violet-400 text-xs flex-shrink-0">📐</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs text-gray-200 font-mono truncate" title="${p.filename}">${p.filename}</p>
+          <p class="text-xs text-gray-600">
+            ${p.detected_client ? `<span class="text-violet-400">${p.detected_client}</span> · ` : ''}${p.size_kb} KB
+          </p>
+        </div>
+        <button onclick="convertPlan('${p.filename}')"
+                class="opacity-0 group-hover:opacity-100 text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1 rounded transition flex-shrink-0">
+          Convert
+        </button>
+        <button onclick="deleteSinglePlan('${p.filename}')"
+                class="opacity-0 group-hover:opacity-100 text-xs text-gray-600 hover:text-red-400 transition px-1.5 py-0.5 rounded hover:bg-red-500 hover:bg-opacity-10 flex-shrink-0"
+                title="Delete ${p.filename}">
+          ✕
+        </button>
+      </div>
+    `).join('');
+  } catch (e) {}
+}
+
+function onPlanCheckbox(checkbox) {
+  if (checkbox.checked) _selectedPlans.add(checkbox.value);
+  else                  _selectedPlans.delete(checkbox.value);
+  updatePlanActionButtons();
+}
+
+function updatePlanActionButtons() {
+  const convertBtn = document.getElementById('prisma-btn-convert-selected');
+  const deleteBtn  = document.getElementById('prisma-btn-delete-selected');
+  const countEl    = document.getElementById('prisma-selected-count');
+  const count      = _selectedPlans.size;
+
+  countEl.textContent = count;
+  convertBtn.classList.toggle('hidden', count === 0);
+  deleteBtn.classList.toggle('hidden',  count === 0);
+}
+
+function togglePlanSelectAll() {
+  const checkboxes = document.querySelectorAll('.prisma-plan-checkbox');
+  const allChecked = [...checkboxes].every(cb => cb.checked);
+  checkboxes.forEach(cb => {
+    cb.checked = !allChecked;
+    if (cb.checked) _selectedPlans.add(cb.value);
+    else            _selectedPlans.delete(cb.value);
+  });
+  document.getElementById('prisma-btn-select-all').textContent = allChecked ? 'Select All' : 'Deselect All';
+  updatePlanActionButtons();
+}
+
+// ── Convert ──────────────────────────────────────────────────────────────────
+
+async function convertPlan(filename) {
+  const statusEl = document.getElementById('prisma-list-status');
+  const statusP  = statusEl.querySelector('p');
+
+  statusEl.classList.remove('hidden');
+  statusP.className   = 'text-xs text-violet-400';
+  statusP.textContent = `⏳ Converting ${filename}…`;
+
+  try {
+    const res  = await fetch('/api/prisma/convert', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ filename }),
+    });
+    const data = await res.json();
+
+    if (res.ok && data.ok) {
+      statusP.className   = 'text-xs text-green-400';
+      statusP.textContent = `✓ Converted ${filename} → ${data.placement_count} placements`;
+      renderConversionResults(data);
+      setTimeout(() => statusEl.classList.add('hidden'), 4000);
+    } else {
+      statusP.className   = 'text-xs text-red-400';
+      statusP.textContent = `✕ ${data.error || 'Conversion failed'}`;
+    }
+  } catch (e) {
+    statusP.className   = 'text-xs text-red-400';
+    statusP.textContent = '[ERR] ' + e.message;
+  }
+}
+
+async function convertSelectedPlans() {
+  for (const filename of _selectedPlans) {
+    await convertPlan(filename);
+  }
+  _selectedPlans.clear();
+  updatePlanActionButtons();
+}
+
+function renderConversionResults(data) {
+  const card = document.getElementById('prisma-results-card');
+  card.classList.remove('hidden');
+
+  document.getElementById('prisma-result-client').textContent     = data.client       || '—';
+  document.getElementById('prisma-result-placements').textContent = data.placement_count || 0;
+  document.getElementById('prisma-result-matched').textContent    = data.matched_count   || 0;
+  document.getElementById('prisma-result-unmatched').textContent  = (data.unmatched_channels || []).length;
+  document.getElementById('prisma-result-filename').textContent   = data.output_file  || '—';
+
+  const dl = document.getElementById('prisma-download-btn');
+  dl.href = data.download_url || '#';
+
+  const unmatchedPanel = document.getElementById('prisma-unmatched-panel');
+  const unmatchedList  = document.getElementById('prisma-unmatched-list');
+  const unmatched      = data.unmatched_channels || [];
+  if (unmatched.length > 0) {
+    unmatchedPanel.classList.remove('hidden');
+    unmatchedList.textContent = unmatched.join(', ');
+  } else {
+    unmatchedPanel.classList.add('hidden');
+  }
+
+  // Smooth scroll into view
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function dismissPrismaResults() {
+  document.getElementById('prisma-results-card').classList.add('hidden');
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+
+async function deleteSinglePlan(filename) {
+  await deletePlans([filename]);
+}
+
+async function deleteSelectedPlans() {
+  if (_selectedPlans.size === 0) return;
+  if (!confirm(`Delete ${_selectedPlans.size} plan(s)?`)) return;
+  await deletePlans([..._selectedPlans]);
+}
+
+async function deletePlans(filenames) {
+  const statusEl = document.getElementById('prisma-list-status');
+  const statusP  = statusEl.querySelector('p');
+
+  statusEl.classList.remove('hidden');
+  statusP.className   = 'text-xs text-yellow-400';
+  statusP.textContent = `⏳ Deleting ${filenames.length} file(s)…`;
+
+  try {
+    const res  = await fetch('/api/prisma/plans/delete', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ filenames }),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      statusP.className   = 'text-xs text-green-400';
+      statusP.textContent = `✓ Deleted ${(data.deleted || []).length} file(s)`;
+      setTimeout(() => statusEl.classList.add('hidden'), 3000);
+    } else {
+      statusP.className   = 'text-xs text-red-400';
+      statusP.textContent = `✕ ${data.error || 'Delete failed'}`;
+    }
+
+    _selectedPlans.clear();
+    loadPlanList();
+  } catch (e) {
+    statusP.className   = 'text-xs text-red-400';
+    statusP.textContent = '[ERR] ' + e.message;
+  }
+}
+
+// ── Initial load on DOM ready ────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  refreshPrismaStatus();
+  loadPlanList();
+});
+
+// ── End Prisma Tab ───────────────────────────────────────────────────────────
+

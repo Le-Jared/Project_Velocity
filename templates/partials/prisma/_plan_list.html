@@ -1,0 +1,36 @@
+<!-- Uploaded Plans Panel -->
+<div id="prisma-plan-panel" class="bg-gray-900 border border-white border-opacity-5 rounded-2xl overflow-hidden hidden">
+  <div class="flex items-center justify-between px-5 py-3 border-b border-white border-opacity-5 bg-gray-950">
+    <div class="flex items-center gap-2">
+      <span class="text-violet-400 text-sm">📂</span>
+      <h3 class="text-sm font-bold text-white">Uploaded Plans</h3>
+      <span id="prisma-plan-count"
+            class="text-xs font-semibold bg-violet-500 bg-opacity-20 text-violet-400 px-2 py-0.5 rounded-full">
+        0
+      </span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="prisma-btn-select-all"
+              onclick="togglePlanSelectAll()"
+              class="text-xs text-gray-400 hover:text-white transition px-2 py-1">
+        Select All
+      </button>
+      <button id="prisma-btn-convert-selected"
+              onclick="convertSelectedPlans()"
+              class="hidden text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded-lg transition">
+        Convert (<span id="prisma-selected-count">0</span>)
+      </button>
+      <button id="prisma-btn-delete-selected"
+              onclick="deleteSelectedPlans()"
+              class="hidden text-xs font-semibold bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-lg transition">
+        Delete
+      </button>
+    </div>
+  </div>
+
+  <div id="prisma-plan-list" class="max-h-64 overflow-y-auto"></div>
+
+  <div id="prisma-list-status" class="hidden px-5 py-2 border-t border-white border-opacity-5 bg-gray-950">
+    <p class="text-xs"></p>
+  </div>
+</div>

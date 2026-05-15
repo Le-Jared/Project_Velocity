@@ -1,0 +1,67 @@
+<!-- Prisma Reference Files Card -->
+<div id="prisma-guide-card" class="bg-gray-900 border border-violet-700 border-opacity-30 rounded-2xl p-5">
+  <div class="flex items-center justify-between gap-3 mb-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-violet-500 bg-opacity-10 flex items-center justify-center text-xl">📚</div>
+      <div>
+        <h3 class="text-sm font-bold text-white">Reference Files</h3>
+        <p class="text-xs text-gray-500">Buying Guide &amp; Prisma Template (stored in Input/)</p>
+      </div>
+    </div>
+    <span id="prisma-ready-badge"
+          class="text-xs font-semibold bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full flex-shrink-0">
+      Checking…
+    </span>
+  </div>
+
+  <!-- Buying Guide row -->
+  <div class="flex items-center gap-3 p-3 bg-gray-950 rounded-lg mb-2">
+    <span class="text-lg flex-shrink-0">📖</span>
+    <div class="flex-1 min-w-0">
+      <p class="text-xs font-semibold text-white">Buying Guide</p>
+      <p id="prisma-guide-meta" class="text-xs text-gray-500 truncate">—</p>
+    </div>
+    <span id="prisma-guide-state"
+          class="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0">—</span>
+    <input type="file"
+           id="buying-guide-input"
+           accept=".xlsx"
+           class="hidden"
+           onchange="uploadBuyingGuide(this.files[0])" />
+    <button onclick="document.getElementById('buying-guide-input').click()"
+            class="text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1 rounded transition flex-shrink-0">
+      Upload
+    </button>
+  </div>
+
+  <!-- Prisma Template row -->
+  <div class="flex items-center gap-3 p-3 bg-gray-950 rounded-lg mb-3">
+    <span class="text-lg flex-shrink-0">📐</span>
+    <div class="flex-1 min-w-0">
+      <p class="text-xs font-semibold text-white">Prisma Import Template</p>
+      <p id="prisma-template-meta" class="text-xs text-gray-500 truncate">—</p>
+    </div>
+    <span id="prisma-template-state"
+          class="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0">—</span>
+    <input type="file"
+           id="prisma-template-input"
+           accept=".xlsx"
+           class="hidden"
+           onchange="uploadPrismaTemplate(this.files[0])" />
+    <button onclick="document.getElementById('prisma-template-input').click()"
+            class="text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1 rounded transition flex-shrink-0">
+      Upload
+    </button>
+  </div>
+
+  <!-- Status footer -->
+  <div class="flex items-center justify-between pt-2 border-t border-white border-opacity-5">
+    <p id="prisma-guide-hint" class="text-xs text-gray-500">Both files required to convert plans.</p>
+    <button onclick="refreshPrismaStatus()"
+            class="text-xs text-violet-400 hover:text-violet-300 transition">
+      ↻ Refresh
+    </button>
+  </div>
+
+  <p id="prisma-upload-feedback" class="hidden text-xs mt-2 text-center"></p>
+</div>

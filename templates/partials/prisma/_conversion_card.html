@@ -1,0 +1,53 @@
+<!-- Conversion Results Card -->
+<div id="prisma-results-card" class="hidden bg-gray-900 border border-green-700 border-opacity-30 rounded-2xl p-6">
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-green-500 bg-opacity-10 flex items-center justify-center text-xl">✅</div>
+      <div>
+        <h3 class="text-base font-bold text-white">Conversion Complete</h3>
+        <p class="text-xs text-gray-500">Prisma-ready import file generated</p>
+      </div>
+    </div>
+    <button onclick="dismissPrismaResults()"
+            class="text-gray-500 hover:text-white transition text-lg leading-none px-2">
+      ✕
+    </button>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="grid grid-cols-4 gap-2 mb-4">
+    <div class="bg-gray-800 bg-opacity-50 rounded-lg p-3 text-center">
+      <p id="prisma-result-client" class="text-base font-black text-violet-300">—</p>
+      <p class="text-xs text-gray-500 mt-0.5">Client</p>
+    </div>
+    <div class="bg-gray-800 bg-opacity-50 rounded-lg p-3 text-center">
+      <p id="prisma-result-placements" class="text-base font-black text-green-400">0</p>
+      <p class="text-xs text-gray-500 mt-0.5">Placements</p>
+    </div>
+    <div class="bg-gray-800 bg-opacity-50 rounded-lg p-3 text-center">
+      <p id="prisma-result-matched" class="text-base font-black text-blue-400">0</p>
+      <p class="text-xs text-gray-500 mt-0.5">Matched</p>
+    </div>
+    <div class="bg-gray-800 bg-opacity-50 rounded-lg p-3 text-center">
+      <p id="prisma-result-unmatched" class="text-base font-black text-yellow-400">0</p>
+      <p class="text-xs text-gray-500 mt-0.5">Unmatched</p>
+    </div>
+  </div>
+
+  <!-- Unmatched warnings -->
+  <div id="prisma-unmatched-panel" class="hidden mb-4 bg-yellow-900 bg-opacity-20 border border-yellow-700 border-opacity-30 rounded-lg p-3">
+    <p class="text-xs font-semibold text-yellow-400 mb-1">⚠ Channels not found in Buying Guide</p>
+    <p id="prisma-unmatched-list" class="text-xs text-yellow-200 font-mono"></p>
+    <p class="text-xs text-gray-500 mt-2">These rows were skipped. Add them to the Buying Guide and re-convert.</p>
+  </div>
+
+  <!-- Download button -->
+  <a id="prisma-download-btn"
+     href="#"
+     class="btn-action block w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold text-sm text-center transition">
+    ⬇ Download Prisma Import File
+  </a>
+
+  <p id="prisma-result-filename"
+     class="text-xs text-gray-500 font-mono text-center mt-2 truncate">—</p>
+</div>
