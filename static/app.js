@@ -558,57 +558,6 @@ document.addEventListener('DOMContentLoaded', loadInvoiceList);
 
 // ── End Invoice List ──────────────────────────────────────────────────────────
 
-function openClearModal() {
-  const modal  = document.getElementById('clear-modal');
-  const status = document.getElementById('clear-modal-status');
-  status.classList.add('hidden');
-  status.textContent = '';
-  document.getElementById('btn-clear-confirm').disabled = false;
-  document.getElementById('btn-clear-confirm').innerHTML = '🗑️ Yes, Clear Everything';
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-}
-
-function closeClearModal() {
-  const modal = document.getElementById('clear-modal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
-}
-
-async function confirmClearWorkspace() {
-  const btn    = document.getElementById('btn-clear-confirm');
-  const status = document.getElementById('clear-modal-status');
-  const banner = document.getElementById('clear-workspace-status');
-
-  btn.disabled  = true;
-  btn.innerHTML = '<span class="spinner"></span> Clearing…';
-  showStatus(status, '⏳ Clearing workspace…', 'text-yellow-400', 0);
-  status.classList.remove('hidden');
-
-  try {
-    const res  = await fetch('/api/clear/workspace', { method: 'POST' });
-    const data = await res.json();
-
-    if (res.ok) {
-      showStatus(status, '✓ ' + data.message, 'text-green-400', 0);
-      logLine('🗑️  ' + data.message, 'log-ok');
-      showStatus(banner, '✓ Workspace cleared', 'text-green-400', 5000);
-      banner.classList.remove('hidden');
-      refreshStatus();
-      loadInvoiceList();
-      setTimeout(() => closeClearModal(), 1800);
-    } else {
-      showStatus(status, '✕ ' + (data.error || 'Clear failed'), 'text-red-400', 0);
-      btn.disabled  = false;
-      btn.innerHTML = '🗑️ Yes, Clear Everything';
-    }
-  } catch (e) {
-    showStatus(status, '✕ ' + e.message, 'text-red-400', 0);
-    btn.disabled  = false;
-    btn.innerHTML = '🗑️ Yes, Clear Everything';
-  }
-}
-
 async function uploadTracker(file) {
   if (!file) return;
   const el = document.getElementById('tracker-upload-status');

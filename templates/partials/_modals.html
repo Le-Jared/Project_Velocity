@@ -1,29 +1,3 @@
-<!-- ── Clear Workspace Modal ── -->
-<div id="clear-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
-  <div class="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm" onclick="closeClearModal()"></div>
-  <div class="relative bg-gray-900 border border-red-800 border-opacity-60 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-    <div class="flex items-center gap-3 mb-4">
-      <div class="w-10 h-10 rounded-xl bg-red-500 bg-opacity-15 flex items-center justify-center text-xl flex-shrink-0">🗑️</div>
-      <div>
-        <p class="font-extrabold text-white text-base">Clear Workspace?</p>
-        <p class="text-xs text-red-400 font-semibold mt-0.5">This action cannot be undone</p>
-      </div>
-    </div>
-    <div class="bg-gray-800 rounded-xl p-4 mb-4 space-y-2">
-      <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Will be permanently deleted</p>
-      <div class="flex items-center gap-2.5"><span class="text-red-400 text-sm">✕</span><span class="text-sm text-gray-200">All PDFs in <code class="text-red-300 bg-gray-700 px-1 rounded">invoices/</code></span></div>
-      <div class="flex items-center gap-2.5"><span class="text-red-400 text-sm">✕</span><span class="text-sm text-gray-200">All folders inside <code class="text-red-300 bg-gray-700 px-1 rounded">Clients/</code></span></div>
-      <div class="flex items-center gap-2.5"><span class="text-red-400 text-sm">✕</span><span class="text-sm text-gray-200">All files inside <code class="text-red-300 bg-gray-700 px-1 rounded">Output/</code></span></div>
-      <div class="flex items-center gap-2.5"><span class="text-red-400 text-sm">✕</span><span class="text-sm text-gray-200">Master Tracker inside <code class="text-red-300 bg-gray-700 px-1 rounded">Input/</code></span></div>
-    </div>
-    <div id="clear-modal-status" class="text-xs mb-3 hidden"></div>
-    <div class="flex gap-3">
-      <button onclick="closeClearModal()" class="flex-1 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-gray-300 font-bold text-sm transition">Cancel</button>
-      <button id="btn-clear-confirm" onclick="confirmClearWorkspace()" class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition">🗑️ Yes, Clear Everything</button>
-    </div>
-  </div>
-</div>
-
 <!-- ── Drive Setup Modal ── -->
 <div id="drive-setup-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
   <div class="absolute inset-0 bg-black bg-opacity-75 backdrop-blur-sm" onclick="closeDriveSetupModal()"></div>
