@@ -1,5 +1,3 @@
-# buying_guide.py
-
 from pathlib import Path
 import pandas as pd
 
@@ -7,12 +5,22 @@ import pandas as pd
 PARTNER_KEYWORDS = {
     "Meta": ["Facebook", "Meta"],
     "Facebook": ["Facebook", "Meta"],
+
     "TikTok": ["TikTok", "Tiktok", "Tik Tok"],
     "Tiktok": ["TikTok", "Tiktok", "Tik Tok"],
-    "Google": ["Google", "UAC", "PMAX", "Search", "Demand Gen", "Youtube"],
+
+    "Google": ["Google", "UAC", "PMAX", "Search", "Demand Gen", "Youtube", "Display"],
     "UAC": ["Google", "UAC"],
+
+    "Google Search": ["Google Search", "Search"],
+    "Google PMAX": ["Google - PMAX", "Google PMAX", "PMAX", "Performance Max"],
+    "Google Display": ["Google Display", "Display", "GDN"],
+    "Google Demand Gen": ["Google Demand Gen", "Demand Gen", "Discovery"],
+    "Google Youtube": ["Google Youtube", "Google YouTube", "Youtube", "YouTube"],
+
     "Apple Search": ["Apple Search", "ASA", "IAD"],
 }
+
 
 
 REQUIRED_GUIDE_COLUMNS = [
@@ -38,19 +46,6 @@ def _clean_columns(df):
 
 
 def load_buying_guide(path, sheet_name="Buying guide 2"):
-    """
-    Load the client Buying Guide.
-
-    Args:
-        path:
-            Path to ACCT 108 BuyingGuide.xlsx.
-
-        sheet_name:
-            Usually 'Buying guide 2'.
-
-    Returns:
-        pandas.DataFrame with cleaned column names.
-    """
     path = Path(path)
 
     if not path.exists():
@@ -70,7 +65,6 @@ def load_buying_guide(path, sheet_name="Buying guide 2"):
             + ", ".join(missing_cols)
         )
 
-    # Remove empty guide rows.
     df = df.dropna(how="all")
 
     return df
@@ -84,15 +78,6 @@ def _normalize_text(value):
 
 
 def _client_matches(value, client):
-    """
-    Matches the client column.
-
-    The guide may contain exact client values like:
-    - GU
-    - MCP
-    - MI
-    - NA
-    """
     value_text = _normalize_text(value).upper()
     client_text = _normalize_text(client).upper()
 
@@ -100,9 +85,6 @@ def _client_matches(value, client):
 
 
 def _booking_type_contains_partner(booking_type, partner):
-    """
-    Checks whether the Buying Guide placement booking type matches a partner.
-    """
     booking_text = _normalize_text(booking_type).lower()
 
     partner_keywords = PARTNER_KEYWORDS.get(partner, [partner])
@@ -115,19 +97,6 @@ def _booking_type_contains_partner(booking_type, partner):
 
 
 def match_buying_guide_row(guide_df, client, partner):
-    """
-    Match a consolidated placement to the correct Buying Guide row.
-
-    Primary match:
-    - Clients that uses these respectively == client
-    - Placement booking type contains partner keyword
-
-    Returns:
-        A dict representing the matched Buying Guide row.
-
-    Raises:
-        ValueError if no match is found.
-    """
     client_col = "Clients that uses these respectively"
     booking_col = "Placement booking type"
 
@@ -152,7 +121,6 @@ def match_buying_guide_row(guide_df, client, partner):
             f"Available booking types for this client: {available}"
         )
 
-    # Prefer CPM rows if multiple rows match.
     cpm_matches = matches[
         matches["Cost method"].astype(str).str.upper().str.strip() == "CPM"
     ]
@@ -164,19 +132,6 @@ def match_buying_guide_row(guide_df, client, partner):
 
 
 def enrich_with_buying_guide(consolidated_df, guide_df):
-    """
-    Add Buying Guide fields to consolidated Prisma placement rows.
-
-    Args:
-        consolidated_df:
-            Output from consolidate_for_prisma().
-
-        guide_df:
-            Output from load_buying_guide().
-
-    Returns:
-        pandas.DataFrame with supplier and Prisma mapping fields added.
-    """
     if consolidated_df.empty:
         raise ValueError("Cannot enrich an empty consolidated dataframe.")
 
@@ -216,11 +171,6 @@ def enrich_with_buying_guide(consolidated_df, guide_df):
 
 
 def preview_buying_guide_matches(consolidated_df, guide_df):
-    """
-    Helper for debugging or UI preview.
-
-    Returns a dataframe showing placement-to-guide matches.
-    """
     preview_rows = []
 
     for _, row in consolidated_df.iterrows():
@@ -253,15 +203,8 @@ def preview_buying_guide_matches(consolidated_df, guide_df):
 
     return pd.DataFrame(preview_rows)
 
+
 class BuyingGuide:
-    """
-    Lightweight compatibility wrapper for Flask status/upload routes.
-
-    Allows app.py to call:
-    - len(bg)
-    - bg.clients()
-    """
-
     def __init__(self, path, sheet_name="Buying guide 2"):
         self.path = path
         self.df = load_buying_guide(path, sheet_name=sheet_name)
@@ -288,4 +231,3 @@ class BuyingGuide:
         ]
 
         return sorted(clients)
-

@@ -1,5 +1,3 @@
-# plan_parser.py
-
 from pathlib import Path
 import re
 import pandas as pd
@@ -68,15 +66,6 @@ METRIC_KEYWORDS = [
 
 
 def _clean_column_name(value):
-    """
-    Normalize Excel column headers.
-
-    Handles:
-    - 'Campaign \\nStart'
-    - ' Campaign Start '
-    - NaN headers
-    - repeated whitespace
-    """
     if pd.isna(value):
         return ""
 
@@ -108,13 +97,6 @@ def _row_contains_terms(row, required_terms):
 
 
 def _score_header_row(row):
-    """
-    Score a row based on how likely it is to be a media placement header row.
-
-    A valid media table usually has:
-    - at least one anchor column like Channel/Partner/Supplier/Campaign/Placement
-    - at least one metric/date/budget column
-    """
     values = _row_values(row)
 
     if not values:
@@ -137,7 +119,6 @@ def _score_header_row(row):
     if has_metric:
         score += 5
 
-    # Prefer rows with several non-empty cells.
     if len(values) >= 4:
         score += 2
 
@@ -148,12 +129,6 @@ def _score_header_row(row):
 
 
 def find_header_row(raw_df, required_terms=None):
-    """
-    Finds the likely placement table header row.
-
-    If required_terms are provided, first try strict matching.
-    If strict matching fails, fall back to scored header detection.
-    """
     if required_terms:
         for idx, row in raw_df.iterrows():
             if _row_contains_terms(row, required_terms):
@@ -169,7 +144,6 @@ def find_header_row(raw_df, required_terms=None):
             best_idx = idx
             best_score = score
 
-    # Threshold avoids picking random title rows.
     if best_score >= 10:
         return best_idx
 
@@ -177,12 +151,6 @@ def find_header_row(raw_df, required_terms=None):
 
 
 def _dedupe_headers(headers):
-    """
-    Deduplicate repeated Excel headers.
-
-    Example:
-    ['Channel', 'Budget', 'Budget'] -> ['Channel', 'Budget', 'Budget__2']
-    """
     seen = {}
     result = []
 
@@ -214,12 +182,6 @@ def _looks_like_repeated_header(row):
 
 
 def parse_media_plan(file_path, required_terms=None):
-    """
-    Parse an Excel media plan into a raw dataframe of placement rows.
-
-    This supports GU-style plans and more generic MI/MCP-like layouts by
-    using flexible header-row detection.
-    """
     file_path = Path(file_path)
 
     if not file_path.exists():
@@ -229,18 +191,16 @@ def parse_media_plan(file_path, required_terms=None):
         file_path,
         sheet_name=None,
         header=None,
-        engine="openpyxl"
+        engine="openpyxl",
     )
 
     parsed_tables = []
-
-    debug_scores = []
 
     for sheet_name, raw_df in sheets.items():
         header_idx = find_header_row(raw_df, required_terms=required_terms)
 
         if header_idx is None:
-          continue
+            continue
 
         raw_headers = raw_df.iloc[header_idx].tolist()
         headers = _dedupe_headers(raw_headers)
@@ -248,21 +208,24 @@ def parse_media_plan(file_path, required_terms=None):
         data = raw_df.iloc[header_idx + 1:].copy()
         data.columns = headers
 
-        # Remove empty columns.
         data = data.loc[:, [col for col in data.columns if col != ""]]
-
-        # Remove fully empty rows.
         data = data.dropna(how="all")
 
-        # Remove repeated header rows.
         data = data[
             ~data.apply(_looks_like_repeated_header, axis=1)
         ]
 
-        # Remove rows that are likely totals/subtotals.
         first_text_col = None
 
-        for candidate in ["Channel", "Partner", "Supplier", "Platform", "Publisher", "Campaign Name", "Campaign"]:
+        for candidate in [
+            "Channel",
+            "Partner",
+            "Supplier",
+            "Platform",
+            "Publisher",
+            "Campaign Name",
+            "Campaign",
+        ]:
             if candidate in data.columns:
                 first_text_col = candidate
                 break
@@ -293,19 +256,12 @@ def parse_media_plan(file_path, required_terms=None):
 
 
 def detect_client(file_path):
-    """
-    Lightweight client detection for UI display and AUTO conversion.
-
-    Uses filename token matching to avoid false matches like:
-    - 'campaign' accidentally matching 'mi'
-    - 'media' accidentally matching 'mi'
-    """
     name = Path(file_path).stem.lower()
 
     normalized = (
         name.replace("_", " ")
-            .replace("-", " ")
-            .replace(".", " ")
+        .replace("-", " ")
+        .replace(".", " ")
     )
 
     tokens = normalized.split()
@@ -326,4 +282,3 @@ def detect_client(file_path):
         return "MCP"
 
     return None
-

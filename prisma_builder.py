@@ -1,5 +1,3 @@
-# prisma_builder.py
-
 from pathlib import Path
 import pandas as pd
 
@@ -30,11 +28,6 @@ PRISMA_COLUMNS = [
 
 
 def _format_excel_date(value):
-    """
-    Format dates for Excel output.
-
-    Prisma commonly accepts date-like Excel values, but this keeps things readable.
-    """
     if pd.isna(value) or value is None:
         return ""
 
@@ -47,16 +40,6 @@ def _format_excel_date(value):
 
 
 def build_prisma_dataframe(enriched_df):
-    """
-    Convert enriched placement rows into the Prisma Digital Import sheet format.
-
-    Args:
-        enriched_df:
-            Output from enrich_with_buying_guide().
-
-    Returns:
-        pandas.DataFrame matching the Prisma import columns.
-    """
     if enriched_df.empty:
         raise ValueError("Cannot build Prisma dataframe from empty data.")
 
@@ -98,12 +81,6 @@ def build_prisma_dataframe(enriched_df):
 
 
 def validate_prisma_dataframe(prisma_df):
-    """
-    Validate final Prisma import rows before export.
-
-    Returns:
-        list of error strings.
-    """
     errors = []
 
     required_text_columns = [
@@ -159,19 +136,6 @@ def validate_prisma_dataframe(prisma_df):
 
 
 def export_prisma_import(enriched_df, output_path):
-    """
-    Export enriched media placements to a Prisma-ready Excel file.
-
-    Args:
-        enriched_df:
-            Output from enrich_with_buying_guide().
-
-        output_path:
-            Where to save the final Excel file.
-
-    Returns:
-        pathlib.Path to the exported file.
-    """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -211,7 +175,6 @@ def export_prisma_import(enriched_df, output_path):
         for col_idx, col_name in enumerate(prisma_df.columns):
             worksheet.write(0, col_idx, col_name, header_format)
 
-            # Set useful widths.
             if col_name in ["Placement Name", "Site Name/Supplier"]:
                 worksheet.set_column(col_idx, col_idx, 30)
             elif col_name in ["Flight Start", "Flight End"]:
@@ -232,11 +195,6 @@ def export_prisma_import(enriched_df, output_path):
 
 
 def export_debug_files(raw_df, normalized_df, consolidated_df, enriched_df, output_dir):
-    """
-    Optional helper: export each pipeline stage for debugging.
-
-    This is very useful while developing the parser.
-    """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

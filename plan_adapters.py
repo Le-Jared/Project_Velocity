@@ -1,5 +1,3 @@
-# plan_adapters.py
-
 import re
 from datetime import datetime
 import pandas as pd
@@ -34,14 +32,6 @@ MONTH_LOOKUP = {
 
 
 def clean_money(value):
-    """
-    Convert money-like values into floats.
-
-    Examples:
-    '$12,342.42' -> 12342.42
-    12342.42 -> 12342.42
-    '-' -> 0.0
-    """
     if pd.isna(value):
         return 0.0
 
@@ -66,13 +56,6 @@ def clean_money(value):
 
 
 def clean_number(value):
-    """
-    Convert number-like values into floats.
-
-    Examples:
-    '12,342,424' -> 12342424.0
-    '0.22%' -> 0.22
-    """
     if pd.isna(value):
         return 0.0
 
@@ -94,46 +77,80 @@ def clean_number(value):
 
 
 def normalize_partner(channel):
-    """
-    Normalize media plan channel names into partner groups.
-
-    This is used for consolidation and Buying Guide matching.
-    """
     if pd.isna(channel):
         return ""
 
-    text = str(channel).strip().lower()
+    raw = str(channel).strip()
+    text = raw.lower()
 
-    if text in ["facebook", "fb", "meta"]:
+    normalized = (
+        text.replace("_", " ")
+        .replace("-", " ")
+        .replace("/", " ")
+        .replace("|", " ")
+        .replace("(", " ")
+        .replace(")", " ")
+    )
+
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    if any(keyword in normalized for keyword in ["facebook", " fb ", "meta"]):
         return "Meta"
 
-    if text in ["tiktok", "tik tok"]:
+    if any(keyword in normalized for keyword in ["tiktok", "tik tok"]):
         return "TikTok"
 
-    if text in [
+    if any(keyword in normalized for keyword in ["apple search", " asa ", " iad "]):
+        return "Apple Search"
+
+    if "google" in normalized:
+        if any(keyword in normalized for keyword in ["sem", "search", "keyword", "kw", "enkw"]):
+            return "Google Search"
+
+        if any(keyword in normalized for keyword in ["pmax", "performance max", "performance_max"]):
+            return "Google PMAX"
+
+        if any(keyword in normalized for keyword in ["youtube", "yt", "video"]):
+            return "Google Youtube"
+
+        if any(keyword in normalized for keyword in ["demand gen", "demandgen", "discovery"]):
+            return "Google Demand Gen"
+
+        if any(keyword in normalized for keyword in ["display", "gdn", "banner"]):
+            return "Google Display"
+
+        if any(keyword in normalized for keyword in ["uac", "app campaign", "app install"]):
+            return "Google"
+
+        return "Google"
+
+    if normalized in ["facebook", "fb", "meta"]:
+        return "Meta"
+
+    if normalized in ["tiktok", "tik tok"]:
+        return "TikTok"
+
+    if normalized in [
         "uac",
         "google uac",
         "google",
         "google search",
         "pmax",
         "google pmax",
+        "google pmax",
         "demand gen",
         "google demand gen",
         "youtube",
         "google youtube",
+        "google display",
     ]:
         return "Google"
 
-    if text in ["asa", "apple search", "apple search ads"]:
-        return "Apple Search"
+    return raw.title()
 
-    return str(channel).strip().title()
 
 
 def get_first_existing(row, possible_columns, default=None):
-    """
-    Safely fetch the first non-empty value from a row using possible column names.
-    """
     for col in possible_columns:
         if col in row.index:
             value = row.get(col)
@@ -144,18 +161,6 @@ def get_first_existing(row, possible_columns, default=None):
 
 
 def parse_flexible_date(value, default_year=2026):
-    """
-    Parse dates from Excel or strings.
-
-    Supports:
-    - Excel datetime objects
-    - '1 Jan'
-    - '31 Mar'
-    - '03-01-26'
-    - '3/1/2026'
-
-    Returns a pandas Timestamp or None.
-    """
     if pd.isna(value):
         return None
 
@@ -165,14 +170,12 @@ def parse_flexible_date(value, default_year=2026):
     if isinstance(value, datetime):
         return pd.Timestamp(value)
 
-    # Try pandas first.
     parsed = pd.to_datetime(value, errors="coerce")
+
     if not pd.isna(parsed):
         return parsed
 
     text = str(value).strip()
-
-    # Pattern like: 1 Jan, 31 Mar, 01 January
     match = re.match(r"^(\d{1,2})\s+([A-Za-z]+)$", text)
 
     if match:
@@ -187,11 +190,6 @@ def parse_flexible_date(value, default_year=2026):
 
 
 def adapt_gu_plan(raw_df, client="GU", default_year=2026):
-    """
-    Adapter for the GU / SkillIgnition-style media plan.
-
-    Converts raw plan rows into a normalized dataframe with consistent columns.
-    """
     records = []
 
     for _, row in raw_df.iterrows():
@@ -210,7 +208,7 @@ def adapt_gu_plan(raw_df, client="GU", default_year=2026):
                 "Campaign Start Date",
                 "Start Date",
                 "Campaign  Start",
-            ]
+            ],
         )
 
         end_raw = get_first_existing(
@@ -221,7 +219,7 @@ def adapt_gu_plan(raw_df, client="GU", default_year=2026):
                 "Campaign End Date",
                 "End Date",
                 "Campaign  End",
-            ]
+            ],
         )
 
         net_media = clean_money(
@@ -251,7 +249,6 @@ def adapt_gu_plan(raw_df, client="GU", default_year=2026):
             )
         )
 
-        # If gross is missing, fall back to net.
         if gross_media <= 0:
             gross_media = net_media
 
@@ -342,8 +339,8 @@ def adapt_gu_plan(raw_df, client="GU", default_year=2026):
             "currency": "USD",
         }
 
-        # Skip rows that look like totals and not real placements.
         channel_text = str(record["channel"]).lower()
+
         if "total" in channel_text:
             continue
 
@@ -356,9 +353,6 @@ def adapt_gu_plan(raw_df, client="GU", default_year=2026):
 
 
 def adapt_generic_plan(raw_df, client="UNKNOWN", default_year=2026):
-    """
-    Flexible generic adapter for MI/MCP and similar media plans.
-    """
     records = []
 
     for _, row in raw_df.iterrows():
@@ -395,7 +389,6 @@ def adapt_generic_plan(raw_df, client="UNKNOWN", default_year=2026):
         )
 
         if channel is None or str(channel).strip() == "":
-            # Some templates only have campaign/placement but no explicit channel.
             channel = campaign_name
 
         if channel is None or str(channel).strip() == "":
@@ -528,7 +521,6 @@ def adapt_generic_plan(raw_df, client="UNKNOWN", default_year=2026):
         if "total" in channel_text or "subtotal" in channel_text:
             continue
 
-        # Skip rows with no meaningful commercial values.
         if record["gross_media"] <= 0 and record["impressions"] <= 0:
             continue
 
@@ -543,22 +535,7 @@ def adapt_generic_plan(raw_df, client="UNKNOWN", default_year=2026):
     return pd.DataFrame(records)
 
 
-
 def consolidate_for_prisma(normalized_df):
-    """
-    Consolidate normalized media rows into Prisma placement-level rows.
-
-    Business rule:
-    - Consolidate by client + partner.
-    - Sum total cost.
-    - Sum total impressions as planned units.
-    - Use CPM as default cost method.
-    - Calculate CPM from total cost and total impressions.
-
-    Formula:
-
-    CPM = planned_amount / planned_units * 1000
-    """
     if normalized_df.empty:
         raise ValueError("Cannot consolidate an empty media plan dataframe.")
 
@@ -576,7 +553,6 @@ def consolidate_for_prisma(normalized_df):
         planned_amount = float(group["gross_media"].sum())
         planned_units = float(group["impressions"].sum())
 
-        # If impressions are missing, attempt to derive them from CPM.
         if planned_units <= 0:
             derived_impressions = []
 
@@ -622,11 +598,6 @@ def consolidate_for_prisma(normalized_df):
 
 
 def adapt_media_plan(raw_df, client="GU", default_year=2026):
-    """
-    Main adapter dispatcher.
-
-    Add more specific client adapters here later.
-    """
     client_upper = str(client).upper().strip()
 
     if client_upper == "GU":
