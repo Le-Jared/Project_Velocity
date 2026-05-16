@@ -14,7 +14,7 @@ from plan_adapters import Placement
 
 
 GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL    = "gemini-1.5-flash"
+GEMINI_MODEL    = "gemini-2.0-flash"
 MAX_BATCH_SIZE  = 25         # placements per Gemini call
 UNKNOWN_VALUES  = ("UNKNOWN", "", None, 0, 0.0)
 
