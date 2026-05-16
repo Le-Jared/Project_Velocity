@@ -39,6 +39,23 @@ CURRENCY_HEADER = {
 WHITE = "FFFFFF"
 DARK  = "1A1A1A"
 
+META_ENTITY_MARKET = {
+    "FACEBOOK SINGAPORE":    "SG",
+    "FACEBOOK UK":           "GB",
+    "FACEBOOK IRELAND":      "IE",
+    "FACEBOOK NETHERLANDS":  "NL",
+    "FACEBOOK AUSTRALIA":    "AU",
+    "FACEBOOK THAILAND":     "TH",
+    "FACEBOOK MALAYSIA":     "MY",
+    "FACEBOOK INDONESIA":    "ID",
+    "FACEBOOK PHILIPPINES":  "PH",
+}
+
+META_ACCOUNT_CLIENT = {
+    "10472231667355": "BHC",
+    "10572631630900": "LGL",
+}
+
 
 def clean_amount(val):
     if val is None:
@@ -431,9 +448,6 @@ def parse_meta_pdf(pdf_path, text, tables):
     period_m       = re.search(r"Billing\s*Period[:\s]*([A-Za-z]{3}-\d{2})", text, re.I)
     billing_period = billing_period_to_str(period_m.group(1)) if period_m else ""
 
-    acc_m      = re.search(r"Account\s*Id\s*/\s*Group[:\s]*(\d+)", text, re.I)
-    account_id = acc_m.group(1).strip() if acc_m else ""
-
     cur_m    = re.search(r"Invoice\s*Currency[:\s]*(USD|SGD|MYR|IDR|AUD|GBP)", text, re.I)
     currency = cur_m.group(1).strip() if cur_m else ""
     if not currency:
@@ -442,10 +456,32 @@ def parse_meta_pdf(pdf_path, text, tables):
 
     client = ""
     market = ""
+
     camp_m = re.search(r"MCSP_([A-Z]{2})_([A-Z0-9]+)_", text, re.I)
     if camp_m:
         market = camp_m.group(1).upper()
         client = camp_m.group(2).upper()
+
+    if not client:
+        pac_m = re.search(r"mcspapac_([A-Z]{2})_[A-Z0-9]+_[^_]+_[A-Z]+_([A-Z]{2,6})_", text, re.I)
+        if pac_m:
+            market = market or pac_m.group(1).upper()
+            client = pac_m.group(2).upper()
+
+    if not market:
+        t_upper = text.upper()
+        for entity_key, entity_market in META_ENTITY_MARKET.items():
+            if entity_key in t_upper:
+                market = entity_market
+                break
+
+    if not client:
+        acc_m = re.search(r"Account\s*Id\s*/\s*Group[:\s]*(\d+)", text, re.I)
+        if not acc_m:
+            acc_m = re.search(r"(?<!\d)(\d{13,15})(?!\d)", text)
+        account_id = acc_m.group(1).strip() if acc_m else ""
+        client     = META_ACCOUNT_CLIENT.get(account_id, "")
+
     if not client:
         adv_m  = re.search(r"Advertiser[:\s]*([^\n]+)", text, re.I)
         client = adv_m.group(1).strip() if adv_m else "UNKNOWN"
@@ -486,7 +522,7 @@ def parse_meta_pdf(pdf_path, text, tables):
         rows.append({
             "Year":             2026,
             "Supplier Name":    "Meta",
-            "Ad Account ID":    account_id,
+            "Ad Account ID":    "",
             "Month of Service": billing_period,
             "Month of Billing": billing_period,
             "Client":           client,
@@ -502,7 +538,7 @@ def parse_meta_pdf(pdf_path, text, tables):
         rows = [{
             "Year":             2026,
             "Supplier Name":    "Meta",
-            "Ad Account ID":    account_id,
+            "Ad Account ID":    "",
             "Month of Service": billing_period,
             "Month of Billing": billing_period,
             "Client":           client,

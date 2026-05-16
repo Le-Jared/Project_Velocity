@@ -1,14 +1,14 @@
 import os
 import re
 import json
+import time
 import pathlib
 from google import genai
 from google.genai import types
 
 GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL    = "gemini-2.0-flash"
+GEMINI_MODEL    = "gemini-2.5-flash"
 MAX_TEXT_CHARS  = 6000
-MIN_TEXT_LENGTH = 120
 
 _client = None
 
@@ -67,25 +67,45 @@ Rules:
 
 
 def _call_text(prompt: str) -> dict:
-    client   = _get_client()
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-    )
-    return _parse_json(response.text)
+    client = _get_client()
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
+            return _parse_json(response.text)
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                wait = 2 ** attempt * 5
+                print(f"  [GEMINI] Rate limited — retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+    return {}
 
 
 def _call_pdf(pdf_path: str, prompt: str) -> dict:
     client   = _get_client()
     pdf_data = pathlib.Path(pdf_path).read_bytes()
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[
-            types.Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
-            prompt,
-        ],
-    )
-    return _parse_json(response.text)
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[
+                    types.Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
+                    prompt,
+                ],
+            )
+            return _parse_json(response.text)
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                wait = 2 ** attempt * 5
+                print(f"  [GEMINI] Rate limited — retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+    return {}
 
 
 FIELD_DESCRIPTIONS = {
@@ -99,7 +119,8 @@ FIELD_DESCRIPTIONS = {
 }
 
 SUPPLIER_HINTS = {
-    "meta":    "This is a Meta (Facebook) Ads invoice. Client codes appear in campaign names like MCSP_TH_CFTH_ where TH=market, CFTH=client.",
+    "meta":   "This is a Meta (Facebook) Ads invoice. Client codes appear in campaign names like mcspapac_MY_F0032_..._LGL_... where MY=market, LGL=client. "
+              "Also check for a standalone 13–15 digit Account Id number anywhere on the page — it may appear as a loose line, not in a labelled field.",
     "google":  "This is a Google Ads invoice. Client codes appear in campaign names like MCSP_ID_BHC_ where ID=market, BHC=client.",
     "apple":   "This is an Apple Search Ads invoice. The client code is a 2–4 letter code near 'Client :' or 'Order Number' fields.",
     "adsjoy":  "This is an AdsJoy Digital invoice. The client code is a 2–4 letter code near 'For ADSJOY DIGITAL' in the document.",
@@ -120,7 +141,8 @@ def resolve_unknown_fields(
         print("  [GEMINI] API key not configured — skipping")
         return {}
 
-    use_pdf = pdf_path and len(text.strip()) < MIN_TEXT_LENGTH
+    # ✅ Always use PDF when available — gives Gemini full visual + structural context
+    use_pdf = bool(pdf_path and pathlib.Path(pdf_path).exists())
     mode    = "PDF" if use_pdf else "text"
     prompt  = _build_prompt(supplier, fields, text if not use_pdf else "")
 

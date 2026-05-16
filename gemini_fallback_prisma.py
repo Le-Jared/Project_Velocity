@@ -1,27 +1,21 @@
-"""
-Gemini fallback for media plan parsing.
-Mirrors the design of gemini_fallback.py but with placement-specific prompts.
-
-Used by app.py /api/prisma/convert when adapters leave fields blank.
-"""
 import os
 import re
 import json
-from typing import Optional
+import time
+import pathlib
 from google import genai
+from google.genai import types
 
 from plan_adapters import Placement
 
 
 GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL    = "gemini-2.0-flash"
-MAX_BATCH_SIZE  = 25         # placements per Gemini call
+GEMINI_MODEL    = "gemini-2.5-flash"
+MAX_BATCH_SIZE  = 25
 UNKNOWN_VALUES  = ("UNKNOWN", "", None, 0, 0.0)
 
 _client = None
 
-
-# ── Client init (matches gemini_fallback.py pattern) ─────────────────────────
 
 def _get_client():
     global _client
@@ -35,8 +29,6 @@ def _get_client():
 def is_available() -> bool:
     return bool(GEMINI_API_KEY)
 
-
-# ── JSON parsing (identical to gemini_fallback.py) ───────────────────────────
 
 def _parse_json(raw: str):
     raw = raw.strip()
@@ -55,8 +47,6 @@ def _parse_json(raw: str):
     return None
 
 
-# ── Field definitions (Prisma-specific) ──────────────────────────────────────
-
 FIELD_DESCRIPTIONS = {
     "channel":      "Normalized channel/publisher name (e.g. 'Google Search', 'Meta Traffic', 'TikTok Smart+', 'Apple Search Ads').",
     "cost_method":  "Billing model: one of CPM, CPC, CPI, CPV, CPT.",
@@ -73,8 +63,9 @@ PLAN_HINTS = {
     "MI / Mercari":  "This is a Mercari/MI media plan. Channels use 'Publisher Product' naming like 'Google Search', 'UAC Install iOS', 'Meta Traffic'.",
 }
 
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+XLS_MIME  = "application/vnd.ms-excel"
 
-# ── Prompt builder ───────────────────────────────────────────────────────────
 
 def _build_prompt(rows: list[dict], unknown_fields: list[str], plan_label: str = "") -> str:
     field_lines = "\n".join(
@@ -107,34 +98,99 @@ Input placements:
 """
 
 
-# ── Core Gemini call ─────────────────────────────────────────────────────────
-
-def _call_gemini(prompt: str):
-    client   = _get_client()
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
+def _build_xlsx_prompt(unknown_fields: list[str], plan_label: str = "") -> str:
+    field_lines = "\n".join(
+        f'  - "{f}": {FIELD_DESCRIPTIONS[f]}'
+        for f in unknown_fields if f in FIELD_DESCRIPTIONS
     )
-    return _parse_json(response.text)
+    hint = PLAN_HINTS.get(plan_label, "")
+
+    return f"""You are an expert media-planning data normalizer for an advertising agency.
+
+{hint}
+
+The attached file is a media plan spreadsheet. Read ALL rows and sheets carefully,
+including merged cells, header rows, and any campaign/flight date context.
+
+For every placement row you can identify, extract the following fields:
+
+Fields to resolve:
+{field_lines}
+
+Rules:
+- Return a JSON ARRAY — one object per placement row, in sheet order.
+- Each object must contain ONLY these keys: {unknown_fields}
+- If a field cannot be determined for a row, return "" for it.
+- cost_method must be one of: CPM, CPC, CPI, CPV, CPT.
+- Dates must be ISO format YYYY-MM-DD.
+- channel must be a clean, canonical name (no extra punctuation or campaign codes).
+- Return ONLY the JSON array. No explanation, no markdown.
+"""
 
 
-# ── Public API ───────────────────────────────────────────────────────────────
+def _call_gemini(prompt: str) -> list | None:
+    client = _get_client()
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
+            return _parse_json(response.text)
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                wait = 2 ** attempt * 5
+                print(f"  [GEMINI] Rate limited — retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+    return None
+
+
+def _call_gemini_xlsx(xlsx_path: str, prompt: str) -> list | None:
+    client    = _get_client()
+    xlsx_data = pathlib.Path(xlsx_path).read_bytes()
+    mime      = XLSX_MIME if xlsx_path.lower().endswith(".xlsx") else XLS_MIME
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[
+                    types.Part.from_bytes(data=xlsx_data, mime_type=mime),
+                    prompt,
+                ],
+            )
+            return _parse_json(response.text)
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                wait = 2 ** attempt * 5
+                print(f"  [GEMINI] Rate limited — retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+    return None
+
 
 def enrich_placements(
     placements: list[Placement],
     plan_label: str = "",
+    xlsx_path:  str = None,
 ) -> list[Placement]:
     """
     Enrich placements with Gemini-resolved values for any blank/unknown fields.
+
+    If xlsx_path is provided, Gemini reads the raw spreadsheet directly for
+    full context (merged cells, header rows, flight dates, etc.) before falling
+    back to the compact JSON row approach.
+
     Returns the same list (mutated in place + returned for chaining).
     """
     if not placements or not is_available():
         return placements
 
-    # Build a row-level view of what's missing for each placement
-    rows_to_send  = []
-    indices       = []
-    unknown_union: set[str] = set()
+    rows_to_send:  list[dict] = []
+    indices:       list[tuple] = []
+    unknown_union: set[str]   = set()
 
     for i, p in enumerate(placements):
         missing = _detect_missing(p)
@@ -147,12 +203,68 @@ def enrich_placements(
         return placements
 
     unknown_fields = sorted(unknown_union)
-    print(f"  [GEMINI] Enriching {len(rows_to_send)} placement(s) — fields: {unknown_fields}")
 
-    # Batch in chunks of MAX_BATCH_SIZE to keep prompts manageable
+    if xlsx_path and pathlib.Path(xlsx_path).exists():
+        print(f"  [GEMINI] Enriching {len(rows_to_send)} placement(s) via XLSX — fields: {unknown_fields}")
+        _enrich_via_xlsx(placements, indices, unknown_fields, plan_label, xlsx_path)
+    else:
+        print(f"  [GEMINI] Enriching {len(rows_to_send)} placement(s) via JSON — fields: {unknown_fields}")
+        _enrich_via_json(placements, rows_to_send, indices, unknown_fields, plan_label)
+
+    return placements
+
+
+def _enrich_via_xlsx(
+    placements:     list[Placement],
+    indices:        list[tuple],
+    unknown_fields: list[str],
+    plan_label:     str,
+    xlsx_path:      str,
+) -> None:
+    """
+    Send the raw XLSX to Gemini and map its response back to placements by position.
+    Falls back to JSON mode if the XLSX call fails or returns wrong shape.
+    """
+    prompt = _build_xlsx_prompt(unknown_fields, plan_label)
+    try:
+        result = _call_gemini_xlsx(xlsx_path, prompt)
+    except Exception as e:
+        print(f"  [GEMINI] XLSX call failed: {e} — falling back to JSON mode")
+        result = None
+
+    if not isinstance(result, list):
+        print(f"  [GEMINI] XLSX response invalid — falling back to JSON mode")
+        rows_to_send = [_placement_to_dict(placements[i]) for i, _ in indices]
+        _enrich_via_json(placements, rows_to_send, indices, unknown_fields, plan_label)
+        return
+
+    # Gemini returns one object per placement row in sheet order.
+    # Map back by position — indices[n] corresponds to result[n].
+    for n, (orig_idx, missing) in enumerate(indices):
+        if n >= len(result):
+            break
+        resolved = result[n]
+        if not resolved:
+            continue
+        p = placements[orig_idx]
+        for field in missing:
+            value = str(resolved.get(field, "")).strip()
+            if value and value.upper() not in ("UNKNOWN", "NONE", "N/A"):
+                _apply(p, field, value)
+
+
+def _enrich_via_json(
+    placements:     list[Placement],
+    rows_to_send:   list[dict],
+    indices:        list[tuple],
+    unknown_fields: list[str],
+    plan_label:     str,
+) -> None:
+    """Original compact-JSON batch approach."""
     resolved_all: list[dict] = []
+
     for start in range(0, len(rows_to_send), MAX_BATCH_SIZE):
-        batch = rows_to_send[start : start + MAX_BATCH_SIZE]
+        batch  = rows_to_send[start : start + MAX_BATCH_SIZE]
         prompt = _build_prompt(batch, unknown_fields, plan_label=plan_label)
         try:
             result = _call_gemini(prompt)
@@ -166,7 +278,6 @@ def enrich_placements(
         else:
             resolved_all.extend(result)
 
-    # Merge resolved values back into the original placements
     for (orig_idx, missing), resolved in zip(indices, resolved_all):
         if not resolved:
             continue
@@ -176,13 +287,8 @@ def enrich_placements(
             if value and value.upper() not in ("UNKNOWN", "NONE", "N/A"):
                 _apply(p, field, value)
 
-    return placements
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _detect_missing(p: Placement) -> list[str]:
-    """Return the list of fields that look unset/unknown on this placement."""
     missing = []
     if not p.channel or p.channel.strip().upper() in ("UNKNOWN", ""):
         missing.append("channel")
@@ -200,7 +306,6 @@ def _detect_missing(p: Placement) -> list[str]:
 
 
 def _placement_to_dict(p: Placement) -> dict:
-    """Compact view of a placement for the prompt context."""
     return {
         "channel":         p.channel,
         "campaign_name":   p.campaign_name,
@@ -219,7 +324,6 @@ def _placement_to_dict(p: Placement) -> dict:
 
 
 def _apply(p: Placement, field: str, value: str) -> None:
-    """Safely write a string value to the placement, coercing where needed."""
     if field == "cost_method":
         p.cost_method = value.upper()
     elif field == "currency":

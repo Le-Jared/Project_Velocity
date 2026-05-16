@@ -20,7 +20,19 @@ REPORT_PATH    = os.path.join(OUTPUT_FOLDER, "invoice_sort_report.csv")
 
 CURRENCY_MARKET = {
     "MYR": "MY", "SGD": "SG", "IDR": "ID",
-    "PHP": "PH", "USD": "USD", "GBP": "GB", "AUD": "AU",
+    "PHP": "PH", "GBP": "GB", "AUD": "AU",
+}
+
+META_ENTITY_MARKET = {
+    "FACEBOOK SINGAPORE":    "SG",
+    "FACEBOOK UK":           "GB",
+    "FACEBOOK IRELAND":      "IE",
+    "FACEBOOK NETHERLANDS":  "NL",
+    "FACEBOOK AUSTRALIA":    "AU",
+    "FACEBOOK THAILAND":     "TH",
+    "FACEBOOK MALAYSIA":     "MY",
+    "FACEBOOK INDONESIA":    "ID",
+    "FACEBOOK PHILIPPINES":  "PH",
 }
 
 MONTH_NAMES = {
@@ -142,13 +154,29 @@ def extract_meta(text, filename):
 
     client = ""
     market = ""
+
     camp_m = re.search(r"MCSP_([A-Z]{2})_([A-Z0-9]+)_", text, re.I)
     if camp_m:
         market = camp_m.group(1).upper()
         client = camp_m.group(2).upper()
 
     if not client:
-        acc_m      = re.search(r"Account\s*Id\s*/\s*Group[:\s]*(\d+)", text, re.I)
+        pac_m = re.search(r"mcspapac_([A-Z]{2})_[A-Z0-9]+_[^_]+_[A-Z]+_([A-Z]{2,6})_", text, re.I)
+        if pac_m:
+            market = market or pac_m.group(1).upper()
+            client = pac_m.group(2).upper()
+
+    if not market:
+        t_upper = text.upper()
+        for entity_key, entity_market in META_ENTITY_MARKET.items():
+            if entity_key in t_upper:
+                market = entity_market
+                break
+
+    if not client:
+        acc_m = re.search(r"Account\s*Id\s*/\s*Group[:\s]*(\d+)", text, re.I)
+        if not acc_m:
+            acc_m = re.search(r"(?<!\d)(\d{13,15})(?!\d)", text)
         account_id = acc_m.group(1).strip() if acc_m else ""
         client     = META_ACCOUNT_CLIENT.get(account_id, "")
 
@@ -160,7 +188,7 @@ def extract_meta(text, filename):
                 client = safe_filename(val).upper()
 
     if not market:
-        market = CURRENCY_MARKET.get(currency, currency)
+        market = CURRENCY_MARKET.get(currency, "")
 
     if not client:
         client = "UNKNOWN"
