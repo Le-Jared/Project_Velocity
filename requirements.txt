@@ -6,6 +6,7 @@ gunicorn
 pdfplumber
 pandas
 openpyxl
+xlsxwriter
 
 # Google APIs
 google-auth

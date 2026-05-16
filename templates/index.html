@@ -10,7 +10,7 @@
 </head>
 <body class="min-h-screen text-white">
 
-  {% include 'partials/_modals.html' %}
+  {% include 'partials/invoices/_modals.html' %}
 
   <header class="border-b border-gray-800 bg-gray-950 bg-opacity-80 backdrop-blur sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -45,7 +45,7 @@
     </div>
 
     <div id="tab-prisma" class="tab-panel active pt-8 space-y-6">
-      {% include 'partials/_tab_prisma.html' %}
+      {% include 'partials/prisma/_tab_prisma.html' %}
     </div>
 
     <div id="tab-invoices" class="tab-panel pt-8 space-y-8">
@@ -65,5 +65,6 @@
   </footer>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='prisma.js') }}"></script>
 </body>
 </html>
