@@ -1,9 +1,17 @@
+# Web framework
 flask
 gunicorn
+
+# PDF & data processing
 pdfplumber
 pandas
 openpyxl
+
+# Google APIs
 google-auth
 google-auth-oauthlib
 google-api-python-client
 google-genai
+
+# Environment variables 
+python-dotenv

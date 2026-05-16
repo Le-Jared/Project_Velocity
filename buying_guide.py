@@ -16,6 +16,17 @@ SHEET_NAME = "Buying guide 2"
 class BuyingGuide:
     """In-memory index of the Buying Guide for fast supplier lookups."""
 
+    # ── Channel alias map ────────────────────────────────────────────────
+    # Maps normalized channel names (from media plans) → normalized booking
+    # keys (from the Buying Guide "Placement booking type" column).
+    # Add new aliases here whenever a media plan uses a non-standard name.
+    CHANNEL_ALIASES: dict[str, str] = {
+        "asa":        "apple search",   # Apple Search Ads
+        "google uac": "google display", # Universal App Campaign
+        "uac":        "google display", # UAC shorthand (SkillIgnition)
+        "meta":       "facebook",       # Meta = Facebook supplier
+    }
+
     def __init__(self, path: Path | str):
         self.path = Path(path)
         self.rows: list[dict] = []
@@ -23,7 +34,7 @@ class BuyingGuide:
             raise FileNotFoundError(f"Buying Guide not found at {self.path}")
         self._load()
 
-    # ── Loading ─────────────────────────────────────────────────────────────
+    # ── Loading ──────────────────────────────────────────────────────────
 
     def _load(self) -> None:
         wb = openpyxl.load_workbook(self.path, data_only=True, read_only=True)
@@ -72,7 +83,7 @@ class BuyingGuide:
 
         wb.close()
 
-    # ── Helpers ─────────────────────────────────────────────────────────────
+    # ── Helpers ──────────────────────────────────────────────────────────
 
     @staticmethod
     def _normalize(text: str) -> str:
@@ -81,21 +92,15 @@ class BuyingGuide:
         t = re.sub(r"[^a-z0-9]+", " ", t).strip()
         return t
 
-    # ── Public API ──────────────────────────────────────────────────────────
+    # ── Internal lookup (single CPS flag) ────────────────────────────────
 
-    def lookup(
+    def _lookup_with_cps(
         self,
-        client: str,
-        channel: str,
-        currency: Optional[str] = None,
-        client_paying_supplier: bool = False,
+        client_u: str,
+        channel_norm: str,
+        currency: Optional[str],
+        client_paying_supplier: bool,
     ) -> Optional[dict]:
-        """Find best-matching guide row for a given client + channel."""
-        client_u      = (client or "").upper()
-        channel_norm  = self._normalize(channel)
-        if not channel_norm:
-            return None
-
         candidates = []
         for row in self.rows:
             if client_u and client_u not in row["_clients"]:
@@ -109,14 +114,12 @@ class BuyingGuide:
             if not booking_key:
                 continue
 
-            # Score: exact > contains
+            # Score: exact > contains > token overlap
             if booking_key == channel_norm:
                 score = 100
             elif channel_norm in booking_key or booking_key in channel_norm:
-                # closer length = better
                 score = 50 - abs(len(booking_key) - len(channel_norm))
             else:
-                # Token overlap fallback
                 ch_tokens = set(channel_norm.split())
                 bk_tokens = set(booking_key.split())
                 overlap   = len(ch_tokens & bk_tokens)
@@ -130,6 +133,40 @@ class BuyingGuide:
             return None
         candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates[0][1]
+
+    # ── Public API ───────────────────────────────────────────────────────
+
+    def lookup(
+        self,
+        client: str,
+        channel: str,
+        currency: Optional[str] = None,
+        client_paying_supplier: bool = False,
+    ) -> Optional[dict]:
+        """
+        Find best-matching guide row for a given client + channel.
+
+        Resolution order:
+          1. Apply channel alias (e.g. 'uac' → 'google display').
+          2. Try exact client_paying_supplier flag as passed.
+          3. If no match, automatically retry with the opposite CPS flag
+             so callers don't need to know whether a client uses CPS or not.
+        """
+        client_u     = (client or "").upper()
+        channel_norm = self._normalize(channel)
+        if not channel_norm:
+            return None
+
+        # Step 1 — apply alias
+        channel_norm = self.CHANNEL_ALIASES.get(channel_norm, channel_norm)
+
+        # Step 2 — try as requested
+        result = self._lookup_with_cps(client_u, channel_norm, currency, client_paying_supplier)
+        if result:
+            return result
+
+        # Step 3 — fallback: retry with opposite CPS flag
+        return self._lookup_with_cps(client_u, channel_norm, currency, not client_paying_supplier)
 
     def clients(self) -> list[str]:
         """Return sorted unique client codes seen in the guide."""

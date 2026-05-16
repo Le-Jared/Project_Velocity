@@ -14,12 +14,12 @@ class Placement:
     """Source-agnostic placement row."""
     channel:         str
     campaign_name:   str = ""
-    placement_name: str = ""
+    placement_name:  str = ""
     objective:       str = ""
     cost_method:     str = ""        # CPM / CPC / CPI / CPV / CPT
     unit_rate:       float = 0.0
     planned_units:   float = 0.0
-    planned_amount: float = 0.0      # net media
+    planned_amount:  float = 0.0     # net media
     gross_amount:    float = 0.0     # with agency fee
     currency:        str = "USD"
     flight_start:    str = ""
@@ -72,11 +72,14 @@ class SkillIgnitionAdapter(BasePlanAdapter):
         if self.sheet_name not in wb.sheetnames:
             return False
         ws = wb[self.sheet_name]
-        for row in ws.iter_rows(min_row=1, max_row=8, values_only=True):
-            joined = " ".join(self._str(c) for c in row).lower()
-            if "campaign name" in joined and "campaign id" in joined:
-                return True
-        return False
+        # FIX: "Campaign Name" and "Campaign ID" are on separate rows —
+        # join the entire scan window instead of checking row-by-row.
+        all_text = " ".join(
+            self._str(c)
+            for row in ws.iter_rows(min_row=1, max_row=10, values_only=True)
+            for c in row
+        ).lower()
+        return "campaign name" in all_text and "campaign id" in all_text
 
     def extract(self, wb) -> list[Placement]:
         ws = wb[self.sheet_name]
@@ -111,6 +114,10 @@ class SkillIgnitionAdapter(BasePlanAdapter):
             channel = self._str(g(row, "Channel"))
             if not channel:
                 continue
+            # Stop at summary/total rows
+            if "total" in channel.lower():
+                break
+
             campaign = self._str(g(row, "Campaign Name"))
             kpi      = self._str(g(row, "KPI"))
             net      = self._flt(g(row, "Net Media (Budget excluding fees)"))
@@ -121,18 +128,18 @@ class SkillIgnitionAdapter(BasePlanAdapter):
             imps     = self._flt(g(row, "Estimated Impression"))
 
             placements.append(Placement(
-                channel         = channel,
+                channel        = channel,
                 campaign_name  = campaign,
                 placement_name = campaign or channel,
-                objective       = kpi,
-                cost_method     = kpi.upper() if kpi else "CPM",
-                unit_rate       = cpm,
-                planned_units   = imps,
+                objective      = kpi,
+                cost_method    = kpi.upper() if kpi else "CPM",
+                unit_rate      = cpm,
+                planned_units  = imps,
                 planned_amount = net,
-                gross_amount    = gross,
-                currency        = "USD",
-                flight_start    = start,
-                flight_end      = end,
+                gross_amount   = gross,
+                currency       = "USD",
+                flight_start   = start,
+                flight_end     = end,
             ))
         return placements
 
@@ -193,7 +200,7 @@ class MCPAdapter(BasePlanAdapter):
                         in_table = False
                         continue
 
-                    rec = dict(zip(headers, row))
+                    rec          = dict(zip(headers, row))
                     media_budget = self._flt(rec.get("Media Budget (SGD)"))
                     gross        = self._flt(rec.get("Gross media budget (SGD)"))
 

@@ -12,29 +12,30 @@ import openpyxl
 
 from buying_guide  import BuyingGuide
 from plan_adapters import Placement
+from gemini_fallback_prisma import is_available as gemini_available, _get_client, _parse_json, GEMINI_MODEL
 
 
 SHEET_NAME = "Digital import sheet ALL TYPES"
 
 # Column positions on the template (1-indexed) — adjust if your template differs
 COLS = {
-    "Row Type":              1,
-    "Site Name/Supplier":    2,
+    "Row Type":               1,
+    "Site Name/Supplier":     2,
     "PACKAGE/PLACEMENT TYPE": 3,
-    "Buy Type":              4,
-    "Buy Category":          5,
-    "Booking Category":      6,
-    "Package name":          7,
-    "Placement Name":        8,
-    "Unit Dimensions":       9,
-    "Positioning":          10,
-    "Cost Method":          11,
-    "Unit Type":            12,
-    "Unit Rate":            13,
-    "Planned unit amount":  14,
-    "Gross/Planned Cost":   15,
-    "Flight Start":         16,
-    "Flight End":           17,
+    "Buy Type":               4,
+    "Buy Category":           5,
+    "Booking Category":       6,
+    "Package name":           7,
+    "Placement Name":         8,
+    "Unit Dimensions":        9,
+    "Positioning":           10,
+    "Cost Method":           11,
+    "Unit Type":             12,
+    "Unit Rate":             13,
+    "Planned unit amount":   14,
+    "Gross/Planned Cost":    15,
+    "Flight Start":          16,
+    "Flight End":            17,
 }
 
 
@@ -77,6 +78,11 @@ def build_prisma_import(
     consolidated = _consolidate(placements)
     start_row    = _find_first_empty_row(ws)
 
+    # ── Pre-build Gemini alias cache for unmatched channels ───────────────
+    # Attempt Gemini resolution once per unique unmatched channel name
+    # so we don't call the API redundantly for repeated channels.
+    gemini_alias_cache: dict[str, Optional[str]] = {}
+
     matched   = 0
     unmatched: list[str] = []
 
@@ -87,6 +93,35 @@ def build_prisma_import(
             channel  = p.channel,
             currency = p.currency,
         )
+
+        # ── Point 2: Gemini fallback for unmatched channels ───────────────
+        if guide_row is None and gemini_available():
+            channel_key = p.channel.strip().lower()
+
+            # Use cached result if we've already asked Gemini about this channel
+            if channel_key not in gemini_alias_cache:
+                gemini_alias_cache[channel_key] = _gemini_resolve_channel(
+                    channel     = p.channel,
+                    client_code = client_code,
+                    guide       = guide,
+                )
+
+            resolved_name = gemini_alias_cache[channel_key]
+            if resolved_name:
+                # Retry lookup with Gemini-suggested name
+                guide_row = guide.lookup(
+                    client   = client_code,
+                    channel  = resolved_name,
+                    currency = p.currency,
+                )
+                if guide_row:
+                    print(f"  [GEMINI] Resolved '{p.channel}' → '{resolved_name}'")
+                    # Persist alias so future plans don't need Gemini for this
+                    guide.CHANNEL_ALIASES[
+                        BuyingGuide._normalize(p.channel)
+                    ] = BuyingGuide._normalize(resolved_name)
+        # ─────────────────────────────────────────────────────────────────
+
         if not guide_row:
             unmatched.append(p.channel)
             continue
@@ -111,7 +146,61 @@ def build_prisma_import(
     }
 
 
-# ── Internal helpers ─────────────────────────────────────────────────────────
+# ── Gemini channel resolver ───────────────────────────────────────────────
+
+def _gemini_resolve_channel(
+    channel: str,
+    client_code: str,
+    guide: BuyingGuide,
+) -> Optional[str]:
+    """
+    Ask Gemini to map an unrecognised channel name to a known
+    Buying Guide booking type. Returns the suggested name or None.
+    """
+    known_keys = sorted({
+        row["_booking_key"]
+        for row in guide.rows
+        if client_code.upper() in row["_clients"]
+        and row["_booking_key"]
+    })
+
+    if not known_keys:
+        return None
+
+    prompt = f"""You are a media planning data assistant.
+
+A channel named "{channel}" (client: {client_code}) could not be matched
+to any entry in the Buying Guide.
+
+The known Buying Guide booking types for this client are:
+{known_keys}
+
+Which one of the above booking types best matches "{channel}"?
+Reply with ONLY the exact booking type string from the list, or reply with
+the word NONE if there is no reasonable match.
+"""
+
+    try:
+        client   = _get_client()
+        response = client.models.generate_content(
+            model    = GEMINI_MODEL,
+            contents = prompt,
+        )
+        suggestion = (response.text or "").strip().strip('"').strip("'")
+        if not suggestion or suggestion.upper() == "NONE":
+            return None
+        # Validate it's actually in the known list (prevent hallucination)
+        norm = BuyingGuide._normalize(suggestion)
+        if any(BuyingGuide._normalize(k) == norm for k in known_keys):
+            return suggestion
+        print(f"  [GEMINI] Suggestion '{suggestion}' not in known keys — ignored")
+        return None
+    except Exception as e:
+        print(f"  [GEMINI] Channel resolution failed for '{channel}': {e}")
+        return None
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────
 
 def _write_row(ws, row_idx: int, p: Placement, guide_row: dict) -> None:
     """Write a single Prisma row using guide values + placement data."""
@@ -122,23 +211,23 @@ def _write_row(ws, row_idx: int, p: Placement, guide_row: dict) -> None:
     cost_method = G("Cost method", p.cost_method or "CPM")
     unit_type   = G("Unit type",   "Impressions")
 
-    ws.cell(row=row_idx, column=COLS["Row Type"],              value="Direct placement")
-    ws.cell(row=row_idx, column=COLS["Site Name/Supplier"],    value=G("Supplier name"))
+    ws.cell(row=row_idx, column=COLS["Row Type"],               value="Direct placement")
+    ws.cell(row=row_idx, column=COLS["Site Name/Supplier"],     value=G("Supplier name"))
     ws.cell(row=row_idx, column=COLS["PACKAGE/PLACEMENT TYPE"], value="Standalone")
-    ws.cell(row=row_idx, column=COLS["Buy Type"],              value=G("Buy type", "Display"))
-    ws.cell(row=row_idx, column=COLS["Buy Category"],          value=G("Buy category", "Display"))
-    ws.cell(row=row_idx, column=COLS["Booking Category"],      value="Standard")
-    ws.cell(row=row_idx, column=COLS["Package name"],          value=G("Buy type", "Display"))
-    ws.cell(row=row_idx, column=COLS["Placement Name"],        value=p.placement_name or p.channel)
-    ws.cell(row=row_idx, column=COLS["Unit Dimensions"],       value=G("Ad size", "1 x 1"))
-    ws.cell(row=row_idx, column=COLS["Positioning"],           value=G("Positioning", "Other"))
-    ws.cell(row=row_idx, column=COLS["Cost Method"],           value=cost_method)
-    ws.cell(row=row_idx, column=COLS["Unit Type"],             value=unit_type)
-    ws.cell(row=row_idx, column=COLS["Unit Rate"],             value=p.unit_rate or None)
-    ws.cell(row=row_idx, column=COLS["Planned unit amount"],   value=p.planned_units or None)
-    ws.cell(row=row_idx, column=COLS["Gross/Planned Cost"],    value=p.planned_amount or p.gross_amount)
-    ws.cell(row=row_idx, column=COLS["Flight Start"],          value=_to_date(p.flight_start))
-    ws.cell(row=row_idx, column=COLS["Flight End"],            value=_to_date(p.flight_end))
+    ws.cell(row=row_idx, column=COLS["Buy Type"],               value=G("Buy type", "Display"))
+    ws.cell(row=row_idx, column=COLS["Buy Category"],           value=G("Buy category", "Display"))
+    ws.cell(row=row_idx, column=COLS["Booking Category"],       value="Standard")
+    ws.cell(row=row_idx, column=COLS["Package name"],           value=G("Buy type", "Display"))
+    ws.cell(row=row_idx, column=COLS["Placement Name"],         value=p.placement_name or p.channel)
+    ws.cell(row=row_idx, column=COLS["Unit Dimensions"],        value=G("Ad size", "1 x 1"))
+    ws.cell(row=row_idx, column=COLS["Positioning"],            value=G("Positioning", "Other"))
+    ws.cell(row=row_idx, column=COLS["Cost Method"],            value=cost_method)
+    ws.cell(row=row_idx, column=COLS["Unit Type"],              value=unit_type)
+    ws.cell(row=row_idx, column=COLS["Unit Rate"],              value=p.unit_rate or None)
+    ws.cell(row=row_idx, column=COLS["Planned unit amount"],    value=p.planned_units or None)
+    ws.cell(row=row_idx, column=COLS["Gross/Planned Cost"],     value=p.planned_amount or p.gross_amount)
+    ws.cell(row=row_idx, column=COLS["Flight Start"],           value=_to_date(p.flight_start))
+    ws.cell(row=row_idx, column=COLS["Flight End"],             value=_to_date(p.flight_end))
 
 
 def _consolidate(placements: list[Placement]) -> list[Placement]:
@@ -158,14 +247,12 @@ def _consolidate(placements: list[Placement]) -> list[Placement]:
             b.gross_amount   += p.gross_amount
             b.planned_units  += p.planned_units
         else:
-            # Shallow copy
             buckets[key] = Placement(**{**p.__dict__})
     return list(buckets.values())
 
 
 def _find_first_empty_row(ws) -> int:
     """Find the first row where column A is empty (after sample template rows)."""
-    # Template ships with example rows — start scanning from row 2 onwards
     row = 2
     while ws.cell(row=row, column=1).value not in (None, ""):
         row += 1

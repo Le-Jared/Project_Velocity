@@ -8,11 +8,14 @@ from pathlib import Path
 import openpyxl
 
 from plan_adapters import ALL_ADAPTERS, BasePlanAdapter, Placement
+from gemini_fallback_prisma import enrich_placements, is_available as gemini_available
 
 
 def parse_plan(path: Path | str) -> tuple[BasePlanAdapter, list[Placement]]:
     """
     Auto-detect plan format and extract placements.
+    Gemini enrichment is applied after extraction to fill any blank fields
+    (dates, currency, objective) that the adapter could not read directly.
     Returns (adapter, placements). Raises ValueError if no adapter matches.
     """
     path = Path(path)
@@ -25,11 +28,26 @@ def parse_plan(path: Path | str) -> tuple[BasePlanAdapter, list[Placement]]:
             try:
                 if adapter.detect(wb):
                     placements = adapter.extract(wb)
+
+                    # ── Gemini enrichment ──────────────────────────────
+                    # Fills blank fields (flight dates, currency, objective,
+                    # cost_method) using the plan context as a hint.
+                    # Skipped silently if GEMINI_API_KEY is not set.
+                    if gemini_available():
+                        print(f"  [GEMINI] Enriching placements for {adapter.label}...")
+                        placements = enrich_placements(
+                            placements,
+                            plan_label=adapter.label,
+                        )
+                    # ──────────────────────────────────────────────────
+
                     return adapter, placements
+
             except Exception as e:
                 # Bad adapter shouldn't kill the whole detection loop
                 print(f"[WARN] Adapter {adapter.label} raised {type(e).__name__}: {e}")
                 continue
+
         raise ValueError(
             f"No adapter recognised the media plan: {path.name}. "
             f"Tried: {', '.join(a.label for a in ALL_ADAPTERS)}"
