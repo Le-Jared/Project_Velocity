@@ -36,6 +36,7 @@ TRACKER_OUTPUT = os.path.join(OUTPUT_FOLDER, "ACCT-108 Master Invoice Tracker 20
 REPORT_PATH = os.path.join(OUTPUT_FOLDER, "invoice_sort_report.csv")
 CREDENTIALS = os.path.join(BASE_DIR, "credentials.json")
 DRIVE_CONFIG = os.path.join(BASE_DIR, "drive_config.json")
+GEMINI_STATE_PATH = os.path.join(OUTPUT_FOLDER, "gemini_state.json")
 
 MEDIA_PLANS_FOLDER = os.path.join(BASE_DIR, "media_plans")
 PRISMA_OUTPUT_DIR = os.path.join(OUTPUT_FOLDER, "prisma")
@@ -63,7 +64,7 @@ def allowed_plan_file(filename):
     return filename.lower().endswith((".xlsx", ".xls"))
 
 
-def gemini_available():
+def gemini_configured():
     if os.environ.get("GEMINI_API_KEY", "").strip():
         return True
 
@@ -86,9 +87,46 @@ def gemini_available():
     return False
 
 
+def get_gemini_enabled():
+    if not os.path.exists(GEMINI_STATE_PATH):
+        return True
+
+    try:
+        with open(GEMINI_STATE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        return bool(data.get("enabled", True))
+    except Exception:
+        return True
+
+
+def set_gemini_enabled(enabled):
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+    with open(GEMINI_STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"enabled": bool(enabled)}, f, indent=2)
+
+
+def gemini_available():
+    return gemini_configured() and get_gemini_enabled()
+
+
+def gemini_status_payload():
+    configured = gemini_configured()
+    enabled = get_gemini_enabled()
+
+    return {
+        "configured": configured,
+        "enabled": enabled,
+        "active": configured and enabled,
+    }
+
+
 def stream_script(script_name, q):
     try:
         script_path = os.path.join(BASE_DIR, script_name)
+        env = os.environ.copy()
+        env["GEMINI_ENABLED"] = "1" if get_gemini_enabled() else "0"
 
         proc = subprocess.Popen(
             [sys.executable, script_path],
@@ -99,6 +137,7 @@ def stream_script(script_name, q):
             encoding="utf-8",
             errors="replace",
             bufsize=1,
+            env=env,
         )
 
         for line in proc.stdout:
@@ -151,6 +190,27 @@ def run_and_stream(script_name):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/gemini/status", methods=["GET"])
+def api_gemini_status():
+    return jsonify(gemini_status_payload())
+
+
+@app.route("/api/gemini/toggle", methods=["POST"])
+def api_gemini_toggle():
+    data = request.get_json(silent=True) or {}
+    enabled = bool(data.get("enabled", True))
+
+    set_gemini_enabled(enabled)
+
+    payload = gemini_status_payload()
+    payload.update({
+        "ok": True,
+        "message": "Gemini enabled." if enabled else "Gemini disabled.",
+    })
+
+    return jsonify(payload)
 
 
 @app.route("/api/status")
@@ -208,6 +268,8 @@ def status():
         except Exception:
             folder_id_set = False
 
+    gemini_state = gemini_status_payload()
+
     return jsonify({
         "pdf_count": pdf_count,
         "client_folders": len(client_list),
@@ -217,7 +279,10 @@ def status():
         "report_exists": report_exists,
         "creds_exists": creds_exists,
         "folder_id_set": folder_id_set,
-        "gemini": gemini_available(),
+        "gemini": gemini_state["active"],
+        "gemini_configured": gemini_state["configured"],
+        "gemini_enabled": gemini_state["enabled"],
+        "gemini_active": gemini_state["active"],
     })
 
 
@@ -703,6 +768,8 @@ def prisma_status():
         except Exception as e:
             error = str(e)
 
+    gemini_state = gemini_status_payload()
+
     return jsonify({
         "guide_loaded": guide_loaded,
         "guide_exists": guide_exists,
@@ -710,7 +777,10 @@ def prisma_status():
         "clients": clients,
         "template_exists": template_exists,
         "ready": guide_loaded and template_exists,
-        "gemini": gemini_available(),
+        "gemini": gemini_state["active"],
+        "gemini_configured": gemini_state["configured"],
+        "gemini_enabled": gemini_state["enabled"],
+        "gemini_active": gemini_state["active"],
         "error": error,
     })
 
@@ -780,7 +850,7 @@ def prisma_convert():
 
     filename = data.get("filename")
     forced_client = (data.get("client") or "").strip().upper()
-    use_gemini = bool(data.get("use_gemini", False))
+    use_gemini = bool(data.get("use_gemini", False)) and gemini_available()
     skip_unmatched = bool(data.get("skip_unmatched_buying_guide", False))
 
     logs = []
@@ -841,6 +911,8 @@ def prisma_convert():
             "forced_client": forced_client or None,
             "client": client,
             "use_gemini": use_gemini,
+            "gemini_configured": gemini_configured(),
+            "gemini_enabled": get_gemini_enabled(),
             "skip_unmatched_buying_guide": skip_unmatched,
         })
 
@@ -918,6 +990,8 @@ def prisma_convert():
             "detected_client": detected_client,
             "forced_client": forced_client or None,
             "use_gemini": use_gemini,
+            "gemini_configured": gemini_configured(),
+            "gemini_enabled": get_gemini_enabled(),
             "skip_unmatched_buying_guide": skip_unmatched,
         })
 

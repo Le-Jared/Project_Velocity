@@ -2,24 +2,72 @@
 
   <!-- Header -->
   <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-    <div class="flex items-start justify-between gap-4">
-      <div>
+    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">
+
+      <!-- Left: Workflow Copy -->
+      <div class="min-w-0 flex-1">
         <p class="text-xs font-bold tracking-widest text-violet-400 uppercase mb-2">
-          Prisma Conversion
+          Prisma Conversion Workflow
         </p>
+
         <h2 class="text-2xl font-black text-white">
-          Media Plan → Prisma Import
+          Media Plan → Buying Guide Match → Prisma Import
         </h2>
-        <p class="text-sm text-gray-500 mt-2 max-w-2xl">
-          Upload media plans, map them against the Buying Guide, consolidate placements,
-          and export a Prisma-ready import file.
+
+        <p class="text-sm text-gray-500 mt-3 max-w-4xl leading-6">
+          Upload media plans, auto-detect the client, normalize and consolidate placements,
+          match each partner against the Buying Guide, then export a Prisma-ready import file.
+          When enabled, Gemini helps clean uncertain partner/channel values and can suggest
+          draft Buying Guide gap rows for finance review.
         </p>
+
+        <div class="flex flex-wrap items-center gap-2 mt-5">
+          <span class="text-xs font-semibold bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-full">
+            1. Upload plans
+          </span>
+
+          <span class="text-xs font-semibold bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-full">
+            2. Detect client
+          </span>
+
+          <span class="text-xs font-semibold bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-full">
+            3. Normalize + consolidate
+          </span>
+
+          <span class="text-xs font-semibold bg-violet-500 bg-opacity-10 text-violet-300 border border-violet-700 border-opacity-40 px-3 py-1.5 rounded-full">
+            4. Gemini cleanup
+          </span>
+
+          <span class="text-xs font-semibold bg-yellow-500 bg-opacity-10 text-yellow-300 border border-yellow-700 border-opacity-40 px-3 py-1.5 rounded-full">
+            5. Buying Guide gaps
+          </span>
+
+          <span class="text-xs font-semibold bg-green-500 bg-opacity-10 text-green-300 border border-green-700 border-opacity-40 px-3 py-1.5 rounded-full">
+            6. Export Prisma file
+          </span>
+        </div>
       </div>
 
-      <span id="prismaReadyBadge"
-            class="text-xs font-semibold bg-gray-800 text-gray-400 px-3 py-1 rounded-full">
-        Checking…
-      </span>
+      <!-- Right: Status Card -->
+      <div class="w-full xl:w-64 flex-shrink-0">
+        <div class="bg-gray-950 border border-gray-800 rounded-2xl p-4">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <span class="text-xs font-bold tracking-widest text-gray-500 uppercase">
+              Status
+            </span>
+
+            <span id="prismaReadyBadge"
+                  class="text-xs font-semibold bg-gray-800 text-gray-400 px-3 py-1 rounded-full">
+              Checking…
+            </span>
+          </div>
+
+          <p class="text-xs text-gray-500 leading-5">
+            Setup requires a valid Buying Guide and Prisma template before conversion.
+          </p>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -326,14 +374,23 @@
 
     <!-- Prisma Log -->
     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-      <div class="flex items-center gap-3 mb-5">
-        <div class="w-10 h-10 rounded-xl bg-gray-500 bg-opacity-10 flex items-center justify-center text-xl">
-          🧾
+      <div class="flex items-center justify-between gap-3 mb-5">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-gray-500 bg-opacity-10 flex items-center justify-center text-xl flex-shrink-0">
+            🧾
+          </div>
+
+          <div class="min-w-0">
+            <h3 class="text-base font-bold text-white">Prisma Log</h3>
+            <p class="text-xs text-gray-500">Upload and conversion activity</p>
+          </div>
         </div>
-        <div>
-          <h3 class="text-base font-bold text-white">Prisma Log</h3>
-          <p class="text-xs text-gray-500">Upload and conversion activity</p>
-        </div>
+
+        <button id="prismaClearLogBtn"
+                type="button"
+                class="text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition flex-shrink-0">
+          Clear
+        </button>
       </div>
 
       <div id="prismaLog"

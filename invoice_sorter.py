@@ -4,42 +4,48 @@ import csv
 import sys
 import shutil
 import warnings
+from time import perf_counter
+from datetime import datetime
+from calendar import month_name
+
 import pdfplumber
 
 from gemini_fallback import enrich_extraction, is_available as gemini_available
+
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 warnings.filterwarnings("ignore")
 
+
 INVOICE_FOLDER = "./invoices"
-OUTPUT_ROOT    = "./Clients"
-OUTPUT_FOLDER  = "./Output"
-REPORT_PATH    = os.path.join(OUTPUT_FOLDER, "invoice_sort_report.csv")
+OUTPUT_ROOT = "./Clients"
+OUTPUT_FOLDER = "./Output"
+REPORT_PATH = os.path.join(OUTPUT_FOLDER, "invoice_sort_report.csv")
+
+SEP = "=" * 72
+SUB_SEP = "-" * 72
 
 CURRENCY_MARKET = {
-    "MYR": "MY", "SGD": "SG", "IDR": "ID",
-    "PHP": "PH", "GBP": "GB", "AUD": "AU",
+    "MYR": "MY",
+    "SGD": "SG",
+    "IDR": "ID",
+    "PHP": "PH",
+    "GBP": "GB",
+    "AUD": "AU",
 }
 
 META_ENTITY_MARKET = {
-    "FACEBOOK SINGAPORE":    "SG",
-    "FACEBOOK UK":           "GB",
-    "FACEBOOK IRELAND":      "IE",
-    "FACEBOOK NETHERLANDS":  "NL",
-    "FACEBOOK AUSTRALIA":    "AU",
-    "FACEBOOK THAILAND":     "TH",
-    "FACEBOOK MALAYSIA":     "MY",
-    "FACEBOOK INDONESIA":    "ID",
-    "FACEBOOK PHILIPPINES":  "PH",
-}
-
-MONTH_NAMES = {
-    "jan": "January",  "feb": "February", "mar": "March",
-    "apr": "April",    "may": "May",       "jun": "June",
-    "jul": "July",     "aug": "August",    "sep": "September",
-    "oct": "October",  "nov": "November",  "dec": "December",
+    "FACEBOOK SINGAPORE": "SG",
+    "FACEBOOK UK": "GB",
+    "FACEBOOK IRELAND": "IE",
+    "FACEBOOK NETHERLANDS": "NL",
+    "FACEBOOK AUSTRALIA": "AU",
+    "FACEBOOK THAILAND": "TH",
+    "FACEBOOK MALAYSIA": "MY",
+    "FACEBOOK INDONESIA": "ID",
+    "FACEBOOK PHILIPPINES": "PH",
 }
 
 META_ACCOUNT_CLIENT = {
@@ -48,463 +54,607 @@ META_ACCOUNT_CLIENT = {
 }
 
 SUPPLIER_NAMES = {
-    "meta": "Meta", "google": "Google",
-    "apple": "Apple", "adsjoy": "AdsJoy",
+    "meta": "Meta",
+    "google": "Google",
+    "apple": "Apple",
+    "adsjoy": "AdsJoy",
 }
+
+SUPPLIER_ORDER = ["meta", "google", "apple", "adsjoy"]
+
+MONTH_NAMES = {m[:3].lower(): m for m in month_name if m}
+
+REPORT_FIELDS = [
+    "original_file",
+    "new_filename",
+    "destination",
+    "supplier",
+    "client",
+    "market",
+    "month",
+    "year",
+    "status",
+]
+
+
+def now_str():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def duration_str(seconds):
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+
+    mins = int(seconds // 60)
+    secs = seconds % 60
+    return f"{mins}m {secs:.1f}s"
+
+
+def log(level, msg="", indent=0):
+    prefix = " " * indent
+    print(f"{prefix}[{level}] {msg}" if msg else "")
+
+
+def print_header():
+    print(SEP)
+    print("ACCT-108 Invoice Sorter")
+    print("Suppliers : Meta | Google | Apple | AdsJoy")
+    print("Mode      : PDF-content-first + Gemini fallback")
+    print(f"Started   : {now_str()}")
+    print(SEP)
+
+    if gemini_available():
+        log("GEMINI", "Fallback active — unknown fields resolved via AI")
+        log("GEMINI", "Native PDF mode auto-enabled for low-text invoices")
+    else:
+        log("GEMINI", "Not configured — regex-only mode")
+
+
+def first_match(patterns, text, flags=re.I, group=1, default=""):
+    if isinstance(patterns, str):
+        patterns = [patterns]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, flags)
+        if match:
+            return match.group(group).strip()
+
+    return default
+
+
+def safe_filename(value):
+    value = str(value or "").strip()
+    value = re.sub(r'[\\/*?:"<>|]', "", value)
+    value = re.sub(r"\s+", " ", value)
+    return value.strip() or "UNKNOWN"
+
+
+def normalize_month(mon, year):
+    if not mon or not year:
+        return None, None
+
+    month = MONTH_NAMES.get(mon[:3].lower(), mon.capitalize())
+    year = str(year)
+
+    if len(year) == 2:
+        year = f"20{year}"
+
+    return month, year
+
+
+def billing_period_to_parts(raw):
+    if not raw:
+        return None, None
+
+    raw = raw.strip()
+
+    patterns = [
+        r"([A-Za-z]{3})-(\d{2})$",
+        r"\d{1,2}\s+([A-Za-z]{3,})\s+(\d{4})",
+        r"([A-Za-z]{3,})\s+(\d{4})$",
+    ]
+
+    for pattern in patterns:
+        match = re.match(pattern, raw)
+        if match:
+            return normalize_month(match.group(1), match.group(2))
+
+    return None, None
+
+
+def extract_currency(text, default="USD"):
+    currency = first_match(r"\b(USD|SGD|MYR|IDR|AUD|GBP|PHP)\b", text)
+    return currency.upper() if currency else default
+
+
+def market_from_currency(currency):
+    return CURRENCY_MARKET.get(currency, currency or "UNKNOWN")
+
+
+def make_month_tag(month, year):
+    month_tag = month[:3].upper() if month and month != "UNKNOWN" else "UNK"
+    year_tag = str(year)[-2:] if year and year != "UNKNOWN" else "00"
+    return f"{month_tag}{year_tag}"
 
 
 def read_pdf_text(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
-        return "".join(p.extract_text() or "" for p in pdf.pages)
+        return "".join(page.extract_text() or "" for page in pdf.pages)
 
 
 def detect_supplier(text, filename):
-    t     = text.upper()
-    fname = os.path.basename(filename).upper()
+    text_upper = text.upper()
+    filename_upper = os.path.basename(filename).upper()
 
-    if "ADSJOY DIGITAL" in t or "ADSJOY" in t:
-        return "adsjoy"
-    if "APPLE DISTRIBUTION" in t or "APPLE SERVICES LATAM" in t or "APPLE SEARCH ADS" in t:
-        return "apple"
-    if "FACEBOOK" in t or "META PLATFORMS" in t:
-        return "meta"
-    if (
-        "GOOGLE ADS" in t
-        or "PT GOOGLE" in t
-        or "GOOGLE LLC" in t
-        or "GOOGLE IRELAND" in t
-        or "GOOGLE ASIA PACIFIC" in t
-        or "COLLECTIONS@GOOGLE.COM" in t
-    ):
-        return "google"
+    content_rules = [
+        ("adsjoy", ["ADSJOY DIGITAL", "ADSJOY"]),
+        ("apple", ["APPLE DISTRIBUTION", "APPLE SERVICES LATAM", "APPLE SEARCH ADS"]),
+        ("meta", ["FACEBOOK", "META PLATFORMS"]),
+        ("google", [
+            "GOOGLE ADS",
+            "PT GOOGLE",
+            "GOOGLE LLC",
+            "GOOGLE IRELAND",
+            "GOOGLE ASIA PACIFIC",
+            "COLLECTIONS@GOOGLE.COM",
+        ]),
+    ]
 
-    if "ADSJOY" in fname:
+    for supplier, keywords in content_rules:
+        if any(keyword in text_upper for keyword in keywords):
+            return supplier
+
+    if "ADSJOY" in filename_upper:
         return "adsjoy"
-    if re.match(r"Q\d+", fname):
+    if re.match(r"Q\d+", filename_upper):
         return "apple"
-    if fname.startswith("TRANSACTION_"):
+    if filename_upper.startswith("TRANSACTION_") or re.match(r"\d{12,}", filename_upper):
         return "meta"
-    if re.match(r"\d{10}", fname):
+    if re.match(r"\d{10}", filename_upper):
         return "google"
 
     return "unknown"
 
 
 def scan_invoices(root_folder):
-    results = []
+    invoices = []
+
     for dirpath, _, files in os.walk(root_folder):
-        for f in sorted(files):
-            if not f.lower().endswith(".pdf"):
+        for filename in sorted(files):
+            if not filename.lower().endswith(".pdf"):
                 continue
-            fpath = os.path.join(dirpath, f)
+
+            pdf_path = os.path.join(dirpath, filename)
+
             try:
-                text = read_pdf_text(fpath)
+                text = read_pdf_text(pdf_path)
             except Exception as e:
-                print(f"  [ERR] Could not read {f}: {e}")
+                log("ERR", f"Could not read {filename}: {e}", indent=2)
                 text = ""
-            supplier = detect_supplier(text, fpath)
-            results.append((fpath, supplier, text))
-    return results
+
+            supplier = detect_supplier(text, pdf_path)
+            invoices.append((pdf_path, supplier, text))
+
+    return invoices
 
 
-def billing_period_to_parts(raw):
-    if not raw:
-        return None, None
-    raw = raw.strip()
+def enrich_with_gemini(result, text, supplier, pdf_path):
+    if not gemini_available():
+        return result
 
-    m = re.match(r"([A-Za-z]{3})-(\d{2})$", raw)
-    if m:
-        return MONTH_NAMES.get(m.group(1).lower(), m.group(1).capitalize()), f"20{m.group(2)}"
+    try:
+        enriched = enrich_extraction(result, text, supplier, pdf_path=pdf_path) or {}
+        merged = result.copy()
+        merged.update({k: v for k, v in enriched.items() if v not in [None, ""]})
+        return merged
+    except Exception as e:
+        log("WARN", f"Gemini enrichment failed for {os.path.basename(pdf_path)}: {e}", indent=2)
+        return result
 
-    m = re.match(r"\d{1,2}\s+([A-Za-z]{3,})\s+(\d{4})", raw)
-    if m:
-        mon = m.group(1).capitalize()
-        return MONTH_NAMES.get(mon[:3].lower(), mon), m.group(2)
 
-    m = re.match(r"([A-Za-z]{3,})\s+(\d{4})$", raw)
-    if m:
-        mon = m.group(1).capitalize()
-        return MONTH_NAMES.get(mon[:3].lower(), mon), m.group(2)
+def normalize_info(info):
+    normalized = {
+        "client": safe_filename(info.get("client") or "UNKNOWN").upper(),
+        "supplier": safe_filename(info.get("supplier") or "UNKNOWN"),
+        "market": safe_filename(info.get("market") or "UNKNOWN").upper(),
+        "month": safe_filename(info.get("month") or "UNKNOWN"),
+        "year": safe_filename(info.get("year") or "UNKNOWN"),
+        "invoice_number": safe_filename(info.get("invoice_number") or "UNKNOWN"),
+    }
+
+    if normalized["market"] in ["", "NONE"]:
+        normalized["market"] = "UNKNOWN"
+
+    return normalized
+
+
+def make_info(client, supplier_key, market, month, year, invoice_number):
+    return normalize_info({
+        "client": client,
+        "supplier": SUPPLIER_NAMES[supplier_key],
+        "market": market,
+        "month": month or "UNKNOWN",
+        "year": year or "UNKNOWN",
+        "invoice_number": invoice_number,
+    })
+
+
+def extract_common_month(text, filename=""):
+    patterns = [
+        r"Summary\s+for\s+\d{1,2}\s+([A-Za-z]+)\s+(\d{4})",
+        r"Billing\s*Period\s*[:\s]*\d{1,2}\s+([A-Za-z]+)\s+(\d{4})",
+        r"([A-Za-z]{3,})\s+(20\d{2})",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, re.I)
+        if match:
+            return normalize_month(match.group(1), match.group(2))
+
+    period = first_match(r"(?:Billing|Invoice)\s*Period[:\s]*([A-Za-z]{3}-\d{2})", text)
+    if period:
+        return billing_period_to_parts(period)
+
+    file_month = first_match(r"_([A-Za-z]{3})_(\d{2})_", filename, flags=re.I)
+    if file_month:
+        match = re.search(r"_([A-Za-z]{3})_(\d{2})_", filename, re.I)
+        return normalize_month(match.group(1), match.group(2))
 
     return None, None
 
 
-def make_month_tag(month_name, year):
-    abbr = month_name[:3].upper() if month_name else "UNK"
-    yr   = year[-2:] if year else "00"
-    return f"{abbr}{yr}"
-
-
-def safe_filename(name):
-    return re.sub(r'[\\/*?:"<>|]', "", str(name)).strip()
-
-
 def extract_meta(text, filename):
-    inv_m          = re.search(r"Invoice\s*#[:\s]*(\d+)", text, re.I)
-    invoice_number = inv_m.group(1).strip() if inv_m else "UNKNOWN"
+    invoice_number = first_match(r"Invoice\s*#[:\s]*(\d+)", text) or "UNKNOWN"
 
-    period_m    = re.search(r"Billing\s*Period[:\s]*([A-Za-z]{3}-\d{2})", text, re.I)
-    month, year = billing_period_to_parts(period_m.group(1) if period_m else "")
+    period = first_match(r"Billing\s*Period[:\s]*([A-Za-z]{3}-\d{2})", text)
+    month, year = billing_period_to_parts(period)
 
-    cur_m    = re.search(r"Invoice\s*Currency[:\s]*(USD|SGD|MYR|IDR|AUD|GBP|PHP)", text, re.I)
-    currency = cur_m.group(1).upper() if cur_m else ""
-    if not currency:
-        cur_m2   = re.search(r"\b(USD|SGD|MYR|IDR|AUD|GBP|PHP)\b", text)
-        currency = cur_m2.group(1).upper() if cur_m2 else "USD"
+    currency = first_match(r"Invoice\s*Currency[:\s]*(USD|SGD|MYR|IDR|AUD|GBP|PHP)", text).upper()
+    currency = currency or extract_currency(text, "USD")
 
     client = ""
     market = ""
 
-    camp_m = re.search(r"MCSP_([A-Z]{2})_([A-Z0-9]+)_", text, re.I)
-    if camp_m:
-        market = camp_m.group(1).upper()
-        client = camp_m.group(2).upper()
+    campaign = re.search(r"MCSP_([A-Z]{2})_([A-Z0-9]+)_", text, re.I)
+    if campaign:
+        market = campaign.group(1).upper()
+        client = campaign.group(2).upper()
 
     if not client:
-        pac_m = re.search(r"mcspapac_([A-Z]{2})_[A-Z0-9]+_[^_]+_[A-Z]+_([A-Z]{2,6})_", text, re.I)
-        if pac_m:
-            market = market or pac_m.group(1).upper()
-            client = pac_m.group(2).upper()
+        pac = re.search(r"mcspapac_([A-Z]{2})_[A-Z0-9]+_[^_]+_[A-Z]+_([A-Z]{2,6})_", text, re.I)
+        if pac:
+            market = market or pac.group(1).upper()
+            client = pac.group(2).upper()
 
     if not market:
-        t_upper = text.upper()
-        for entity_key, entity_market in META_ENTITY_MARKET.items():
-            if entity_key in t_upper:
-                market = entity_market
-                break
+        text_upper = text.upper()
+        market = next((v for k, v in META_ENTITY_MARKET.items() if k in text_upper), "")
 
     if not client:
-        acc_m = re.search(r"Account\s*Id\s*/\s*Group[:\s]*(\d+)", text, re.I)
-        if not acc_m:
-            acc_m = re.search(r"(?<!\d)(\d{13,15})(?!\d)", text)
-        account_id = acc_m.group(1).strip() if acc_m else ""
-        client     = META_ACCOUNT_CLIENT.get(account_id, "")
+        account_id = first_match([
+            r"Account\s*Id\s*/\s*Group[:\s]*(\d+)",
+            r"(?<!\d)(\d{13,15})(?!\d)",
+        ], text)
+        client = META_ACCOUNT_CLIENT.get(account_id, "")
 
     if not client:
-        adv_m = re.search(r"Advertiser[:\s]*([^\n]+)", text, re.I)
-        if adv_m:
-            val = adv_m.group(1).strip()
-            if not re.search(r"saatchi|m&c|mcsaatchi", val, re.I):
-                client = safe_filename(val).upper()
+        advertiser = first_match(r"Advertiser[:\s]*([^\n]+)", text)
+        if advertiser and not re.search(r"saatchi|m&c|mcsaatchi", advertiser, re.I):
+            client = advertiser.upper()
 
-    if not market:
-        market = CURRENCY_MARKET.get(currency, "")
+    market = market or market_from_currency(currency)
+    client = client or "UNKNOWN"
 
-    if not client:
-        client = "UNKNOWN"
-
-    result = {
-        "client":         client,
-        "supplier":       SUPPLIER_NAMES["meta"],
-        "market":         market,
-        "month":          month or "UNKNOWN",
-        "year":           year  or "UNKNOWN",
-        "invoice_number": safe_filename(invoice_number),
-    }
-
-    if gemini_available():
-        result = enrich_extraction(result, text, "meta", pdf_path=filename)
-
-    return result
+    result = make_info(client, "meta", market, month, year, invoice_number)
+    return normalize_info(enrich_with_gemini(result, text, "meta", filename))
 
 
 def extract_google(text, filename):
     fname = os.path.basename(filename)
 
-    inv_m          = re.search(r"Invoice\s*number[:\s.]*(\d+)", text, re.I)
-    invoice_number = inv_m.group(1).strip() if inv_m else ""
-    if not invoice_number:
-        fn_m           = re.search(r"(\d{10})", fname)
-        invoice_number = fn_m.group(1) if fn_m else "UNKNOWN"
+    invoice_number = first_match(r"Invoice\s*number[:\s.]*(\d+)", text)
+    invoice_number = invoice_number or first_match(r"(\d{10})", fname) or "UNKNOWN"
 
-    month, year = None, None
-    sum_m = re.search(r"Summary\s+for\s+\d{1,2}\s+([A-Za-z]+)\s+(\d{4})", text, re.I)
-    if sum_m:
-        mon   = sum_m.group(1).capitalize()
-        month = MONTH_NAMES.get(mon[:3].lower(), mon)
-        year  = sum_m.group(2)
+    month, year = extract_common_month(text, fname)
+    currency = extract_currency(text, "USD")
 
-    if not month:
-        period_m    = re.search(r"(?:Billing|Invoice)\s*Period[:\s]*([A-Za-z]{3}-\d{2})", text, re.I)
-        month, year = billing_period_to_parts(period_m.group(1) if period_m else "")
+    client = ""
+    market = market_from_currency(currency)
 
-    cur_m    = re.search(r"\b(IDR|MYR|SGD|PHP|USD|GBP|AUD)\b", text)
-    currency = cur_m.group(1).upper() if cur_m else "USD"
+    campaign = re.search(r"MCSP_([A-Z]{2})_([A-Z0-9]+)_", text, re.I)
+    if campaign:
+        market = campaign.group(1).upper()
+        client = campaign.group(2).upper()
 
-    client = "UNKNOWN"
-    market = CURRENCY_MARKET.get(currency, currency)
+    if not client:
+        client = first_match(r"^Account:\s*([A-Za-z0-9]+)", text, flags=re.I | re.MULTILINE).upper()
 
-    camp_m = re.search(r"MCSP_([A-Z]{2})_([A-Z0-9]+)_", text, re.I)
-    if camp_m:
-        market = camp_m.group(1).upper()
-        client = camp_m.group(2).upper()
+    client = client or "UNKNOWN"
 
-    if client == "UNKNOWN":
-        acc_m = re.search(r"^Account:\s*([A-Za-z0-9]+)", text, re.I | re.MULTILINE)
-        if acc_m:
-            client = acc_m.group(1).strip().upper()
-
-    result = {
-        "client":         client,
-        "supplier":       SUPPLIER_NAMES["google"],
-        "market":         market,
-        "month":          month or "UNKNOWN",
-        "year":           year  or "UNKNOWN",
-        "invoice_number": safe_filename(invoice_number),
-    }
-
-    if gemini_available():
-        result = enrich_extraction(result, text, "google", pdf_path=filename)
-
-    return result
+    result = make_info(client, "google", market, month, year, invoice_number)
+    return normalize_info(enrich_with_gemini(result, text, "google", filename))
 
 
 def extract_apple(text, filename):
     fname = os.path.basename(filename)
 
-    inv_m          = re.search(r"(Q\d+)", fname, re.I)
-    invoice_number = inv_m.group(1).upper() if inv_m else ""
-    if not invoice_number:
-        m              = re.search(r"Invoice\s*Number[:\s]*([A-Z0-9]+)", text, re.I)
-        invoice_number = m.group(1).strip() if m else "UNKNOWN"
+    invoice_number = first_match(r"(Q\d+)", fname, flags=re.I).upper()
+    invoice_number = invoice_number or first_match(r"Invoice\s*Number[:\s]*([A-Z0-9]+)", text) or "UNKNOWN"
 
-    client   = ""
-    client_m = re.search(r"\bClient\s*[:\s]+([A-Z]{2,6})\b", text, re.I)
-    if client_m:
-        val = client_m.group(1).strip().upper()
-        if val not in ("NAME", "AND", "ADDRESS", "NUMBER", "ID", "THE"):
-            client = val
+    client = first_match([
+        r"\bClient\s*[:\s]+([A-Z]{2,6})\b",
+        r"Order\s*Number\s*[:\s]*([A-Z]{2,6})\d*",
+        r"Description\s*[:\s]*\(S\)[^\n]+\s+([A-Z]{2,6})\s*$",
+    ], text, flags=re.I | re.MULTILINE).upper()
 
-    if not client:
-        order_m = re.search(r"Order\s*Number\s*[:\s]*([A-Z]{2,6})\d*", text, re.I)
-        if order_m:
-            client = order_m.group(1).strip().upper()
-
-    if not client:
-        desc_m = re.search(
-            r"Description\s*[:\s]*\(S\)[^\n]+\s+([A-Z]{2,6})\s*$",
-            text, re.I | re.MULTILINE
-        )
-        if desc_m:
-            client = desc_m.group(1).strip().upper()
-
-    if not client:
+    if client in ("NAME", "AND", "ADDRESS", "NUMBER", "ID", "THE", ""):
         client = "UNKNOWN"
 
-    month, year = None, None
-    bp_m = re.search(r"Billing\s*Period\s*[:\s]*\d{1,2}\s+([A-Za-z]+)\s+(\d{4})", text, re.I)
-    if bp_m:
-        mon   = bp_m.group(1).capitalize()
-        month = MONTH_NAMES.get(mon[:3].lower(), mon)
-        year  = bp_m.group(2)
+    month, year = extract_common_month(text, fname)
 
-    if not month:
-        m2 = re.search(r"([A-Za-z]{3,})\s+(20\d{2})", text)
-        if m2:
-            mon   = m2.group(1).capitalize()
-            month = MONTH_NAMES.get(mon[:3].lower(), mon)
-            year  = m2.group(2)
+    currency = first_match(r"Currency\s*[:\s]*(USD|SGD|MYR|IDR|AUD|GBP|PHP)", text).upper()
+    currency = currency or extract_currency(text, "USD")
 
-    cur_m    = re.search(r"Currency\s*[:\s]*(USD|SGD|MYR|IDR|AUD|GBP|PHP)", text, re.I)
-    currency = cur_m.group(1).upper() if cur_m else ""
-    if not currency:
-        cur_m2   = re.search(r"\b(USD|SGD|MYR|IDR|AUD|GBP|PHP)\b", text)
-        currency = cur_m2.group(1).upper() if cur_m2 else "USD"
+    market = first_match(r"\b(SG|MY|ID|TH|PH|MX|AU|GB|US)\b", text).upper()
+    market = market or market_from_currency(currency)
 
-    market_m = re.search(r"\b(SG|MY|ID|TH|PH|MX|AU|GB|US)\b", text)
-    market   = market_m.group(1).upper() if market_m else CURRENCY_MARKET.get(currency, currency)
-
-    result = {
-        "client":         client,
-        "supplier":       SUPPLIER_NAMES["apple"],
-        "market":         market,
-        "month":          month or "UNKNOWN",
-        "year":           year  or "UNKNOWN",
-        "invoice_number": safe_filename(invoice_number),
-    }
-
-    if gemini_available():
-        result = enrich_extraction(result, text, "apple", pdf_path=filename)
-
-    return result
+    result = make_info(client, "apple", market, month, year, invoice_number)
+    return normalize_info(enrich_with_gemini(result, text, "apple", filename))
 
 
 def extract_adsjoy(text, filename):
     fname = os.path.basename(filename)
 
-    inv_m = re.search(r"Invoice[:\s#]*([0-9]{2}-[0-9]{2}/[A-Za-z]{3}/[0-9]+)", text, re.I)
-    if not inv_m:
-        inv_m = re.search(
-            r"Invoice\s*(?:No\.?|Number|#)?\s*[:\s]*([0-9A-Za-z\-/]+)",
-            text, re.I
-        )
-    invoice_number = inv_m.group(1).strip() if inv_m else "UNKNOWN"
+    invoice_number = first_match([
+        r"Invoice[:\s#]*([0-9]{2}-[0-9]{2}/[A-Za-z]{3}/[0-9]+)",
+        r"Invoice\s*(?:No\.?|Number|#)?\s*[:\s]*([0-9A-Za-z\-/]+)",
+    ], text) or "UNKNOWN"
 
-    client   = ""
-    client_m = re.search(r"\n([A-Z]{2,6})\s*\nFor\s+ADSJOY\s+DIGITAL", text, re.I)
-    if client_m:
-        client = client_m.group(1).strip().upper()
+    client = first_match([
+        r"\n([A-Z]{2,6})\s*\nFor\s+ADSJOY\s+DIGITAL",
+        r"For\s+ADSJOY\s+DIGITAL\s*\n([A-Z]{2,6})\s",
+        r"\$[\d,]+\.00\s*\nFor\s+ADSJOY\s+DIGITAL\s*\n([A-Z]{2,6})",
+    ], text).upper()
 
     if not client:
-        client_m2 = re.search(r"For\s+ADSJOY\s+DIGITAL\s*\n([A-Z]{2,6})\s", text, re.I)
-        if client_m2:
-            client = client_m2.group(1).strip().upper()
-
-    if not client:
-        client_m3 = re.search(
-            r"\$[\d,]+\.00\s*\nFor\s+ADSJOY\s+DIGITAL\s*\n([A-Z]{2,6})",
-            text, re.I
-        )
-        if client_m3:
-            client = client_m3.group(1).strip().upper()
-
-    if not client:
-        fn_m   = re.search(r"SAATCHI_([A-Z]+)_", fname, re.I)
-        client = fn_m.group(1).upper() if fn_m else "UNKNOWN"
+        client = first_match(r"SAATCHI_([A-Z]+)_", fname, flags=re.I).upper()
 
     month, year = None, None
-    mos_m = re.search(r"([A-Za-z]{3})'(\d{2})", text)
-    if mos_m:
-        month = MONTH_NAMES.get(mos_m.group(1).lower(), mos_m.group(1).capitalize())
-        year  = f"20{mos_m.group(2)}"
+
+    service_period = re.search(r"([A-Za-z]{3})'(\d{2})", text)
+    if service_period:
+        month, year = normalize_month(service_period.group(1), service_period.group(2))
 
     if not month:
-        fn_m2 = re.search(r"_([A-Za-z]{3})_(\d{2})_", fname)
-        if fn_m2:
-            month = MONTH_NAMES.get(fn_m2.group(1).lower(), fn_m2.group(1).capitalize())
-            year  = f"20{fn_m2.group(2)}"
+        file_period = re.search(r"_([A-Za-z]{3})_(\d{2})_", fname, re.I)
+        if file_period:
+            month, year = normalize_month(file_period.group(1), file_period.group(2))
 
-    cur_m    = re.search(r"\b(USD|SGD|MYR|IDR|AUD|GBP|PHP)\b", text)
-    currency = cur_m.group(1).upper() if cur_m else "USD"
+    currency = extract_currency(text, "USD")
+    market = market_from_currency(currency)
 
-    result = {
-        "client":         client,
-        "supplier":       SUPPLIER_NAMES["adsjoy"],
-        "market":         CURRENCY_MARKET.get(currency, currency),
-        "month":          month or "UNKNOWN",
-        "year":           year  or "UNKNOWN",
-        "invoice_number": safe_filename(invoice_number),
-    }
-
-    if gemini_available():
-        result = enrich_extraction(result, text, "adsjoy", pdf_path=filename)
-
-    return result
+    result = make_info(client or "UNKNOWN", "adsjoy", market, month, year, invoice_number)
+    return normalize_info(enrich_with_gemini(result, text, "adsjoy", filename))
 
 
 def extract_info(text, filename, supplier):
+    extractors = {
+        "meta": extract_meta,
+        "google": extract_google,
+        "apple": extract_apple,
+        "adsjoy": extract_adsjoy,
+    }
+
     try:
-        if supplier == "meta":
-            return extract_meta(text, filename)
-        elif supplier == "google":
-            return extract_google(text, filename)
-        elif supplier == "apple":
-            return extract_apple(text, filename)
-        elif supplier == "adsjoy":
-            return extract_adsjoy(text, filename)
-        return None
+        extractor = extractors.get(supplier)
+        return extractor(text, filename) if extractor else None
     except Exception as e:
-        print(f"  [ERR] Extraction failed: {e}")
+        log("ERR", f"Extraction failed: {e}", indent=2)
         return None
 
 
 def build_destination(info):
     month_tag = make_month_tag(info["month"], info["year"])
-    new_name  = (
+
+    new_filename = safe_filename(
         f"{info['client']}_"
         f"{info['supplier']}_"
         f"{info['market']}_"
         f"{month_tag}_"
         f"{info['invoice_number']}.pdf"
     )
+
     dest_dir = os.path.join(
         OUTPUT_ROOT,
-        info["client"],
-        info["market"],
-        info["year"],
-        info["month"],
+        safe_filename(info["client"]),
+        safe_filename(info["market"]),
+        safe_filename(info["year"]),
+        safe_filename(info["month"]),
     )
-    return new_name, dest_dir
+
+    return new_filename, dest_dir
+
+
+def make_report_row(
+    original_file,
+    status,
+    new_filename="-",
+    destination="-",
+    supplier="-",
+    client="-",
+    market="-",
+    month="-",
+    year="-",
+):
+    return {
+        "original_file": original_file,
+        "new_filename": new_filename,
+        "destination": destination,
+        "supplier": supplier,
+        "client": client,
+        "market": market,
+        "month": month,
+        "year": year,
+        "status": status,
+    }
+
+
+def write_report(rows):
+    with open(REPORT_PATH, "w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=REPORT_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def init_stats():
+    return {
+        "scanned": 0,
+        "copied": 0,
+        "skipped": 0,
+        "unknown": 0,
+        "errors": 0,
+        "suppliers": {
+            "meta": {"pdfs": 0, "copied": 0, "skipped": 0},
+            "google": {"pdfs": 0, "copied": 0, "skipped": 0},
+            "apple": {"pdfs": 0, "copied": 0, "skipped": 0},
+            "adsjoy": {"pdfs": 0, "copied": 0, "skipped": 0},
+        },
+    }
+
+
+def print_sort_summary(stats, elapsed):
+    print()
+    print(SUB_SEP)
+    print("SORTING SUMMARY")
+    print(SUB_SEP)
+    print(f"PDFs scanned          : {stats['scanned']}")
+    print(f"Files copied          : {stats['copied']}")
+    print(f"Files skipped         : {stats['skipped']}")
+    print(f"Unknown supplier      : {stats['unknown']}")
+    print(f"Extraction/copy errors: {stats['errors']}")
+    print()
+
+    for supplier in SUPPLIER_ORDER:
+        row = stats["suppliers"][supplier]
+        print(
+            f"{SUPPLIER_NAMES[supplier]:<20}: "
+            f"PDFs {row['pdfs']:<3} | "
+            f"Copied {row['copied']:<3} | "
+            f"Skipped {row['skipped']}"
+        )
+
+    print()
+    print(f"Audit report          : {REPORT_PATH}")
+    print(f"Duration              : {duration_str(elapsed)}")
+    print(f"Result                : {'SUCCESS' if stats['errors'] == 0 else 'COMPLETED WITH WARNINGS'}")
+    print(SUB_SEP)
 
 
 def main():
-    print("=" * 65)
-    print("  ACCT-108 Invoice Sorter  ")
-    print("  Meta | Google | Apple | AdsJoy")
-    print("  [PDF-content-first + Gemini fallback w/ native PDF]")
-    print("=" * 65)
+    start = perf_counter()
 
-    if gemini_available():
-        print("  [GEMINI] Fallback active — unknown fields resolved via AI")
-        print("  [GEMINI] Native PDF mode auto-enabled for low-text invoices")
-    else:
-        print("  [GEMINI] Not configured — regex-only mode (set GEMINI_API_KEY to enable)")
+    print_header()
 
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
     invoices = scan_invoices(INVOICE_FOLDER)
-    print(f"\n[SCAN] Found {len(invoices)} PDF invoice(s)\n")
+
+    stats = init_stats()
+    stats["scanned"] = len(invoices)
+
+    print()
+    log("SCAN", f"Found {len(invoices)} PDF invoice(s)")
+    print()
 
     report_rows = []
 
-    for fpath, supplier, text in invoices:
-        fname = os.path.basename(fpath)
-        print(f"[PDF]  {fname}  ->  [{supplier.upper()}]")
+    for pdf_path, supplier, text in invoices:
+        filename = os.path.basename(pdf_path)
+        print(f"[PDF] {filename} -> [{supplier.upper()}]")
 
         if supplier == "unknown":
-            print("  [WARN] Could not detect supplier — skipped")
-            report_rows.append({
-                "original_file": fname, "new_filename": "-", "destination": "-",
-                "supplier": "UNKNOWN", "client": "-", "market": "-",
-                "month": "-", "year": "-", "status": "SKIPPED - unknown supplier",
-            })
+            stats["skipped"] += 1
+            stats["unknown"] += 1
+
+            log("WARN", "Could not detect supplier — skipped", indent=2)
+
+            report_rows.append(make_report_row(
+                original_file=filename,
+                supplier="UNKNOWN",
+                status="SKIPPED - unknown supplier",
+            ))
             continue
 
-        info = extract_info(text, fpath, supplier)
+        stats["suppliers"][supplier]["pdfs"] += 1
+
+        info = extract_info(text, pdf_path, supplier)
+
         if not info:
-            print("  [ERR]  Extraction failed — skipped")
-            report_rows.append({
-                "original_file": fname, "new_filename": "-", "destination": "-",
-                "supplier": supplier, "client": "-", "market": "-",
-                "month": "-", "year": "-", "status": "SKIPPED - extraction error",
-            })
+            stats["skipped"] += 1
+            stats["errors"] += 1
+            stats["suppliers"][supplier]["skipped"] += 1
+
+            log("ERR", "Extraction failed — skipped", indent=2)
+
+            report_rows.append(make_report_row(
+                original_file=filename,
+                supplier=SUPPLIER_NAMES.get(supplier, supplier),
+                status="SKIPPED - extraction error",
+            ))
             continue
 
-        new_name, dest_dir = build_destination(info)
-        dest_path          = os.path.join(dest_dir, new_name)
+        new_filename, dest_dir = build_destination(info)
+        dest_path = os.path.join(dest_dir, new_filename)
 
-        os.makedirs(dest_dir, exist_ok=True)
-        shutil.copy2(fpath, dest_path)
-        print(f"  [OK]  -> {dest_path}")
+        try:
+            os.makedirs(dest_dir, exist_ok=True)
+            shutil.copy2(pdf_path, dest_path)
 
-        report_rows.append({
-            "original_file": fname,
-            "new_filename":  new_name,
-            "destination":   dest_path,
-            "supplier":      info["supplier"],
-            "client":        info["client"],
-            "market":        info["market"],
-            "month":         info["month"],
-            "year":          info["year"],
-            "status":        "OK - copied",
-        })
+            stats["copied"] += 1
+            stats["suppliers"][supplier]["copied"] += 1
 
-    with open(REPORT_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            "original_file", "new_filename", "destination",
-            "supplier", "client", "market", "month", "year", "status"
-        ])
-        writer.writeheader()
-        writer.writerows(report_rows)
+            log("OK", f"{info['client']} | {info['market']} | {info['month']} {info['year']}", indent=2)
+            log("COPY", dest_path, indent=2)
 
-    ok      = sum(1 for r in report_rows if r["status"].startswith("OK"))
-    skipped = len(report_rows) - ok
-    print("\n" + "=" * 65)
-    print(f"  [DONE] {ok} file(s) sorted successfully")
-    if skipped:
-        print(f"  [WARN] {skipped} file(s) skipped — check report")
-    print(f"  [RPT]  Audit report -> Output/invoice_sort_report.csv")
-    print("=" * 65)
+            report_rows.append(make_report_row(
+                original_file=filename,
+                new_filename=new_filename,
+                destination=dest_path,
+                supplier=info["supplier"],
+                client=info["client"],
+                market=info["market"],
+                month=info["month"],
+                year=info["year"],
+                status="OK - copied",
+            ))
+
+        except Exception as e:
+            stats["skipped"] += 1
+            stats["errors"] += 1
+            stats["suppliers"][supplier]["skipped"] += 1
+
+            log("ERR", f"Copy failed: {e}", indent=2)
+
+            report_rows.append(make_report_row(
+                original_file=filename,
+                new_filename=new_filename,
+                destination=dest_path,
+                supplier=info.get("supplier", SUPPLIER_NAMES.get(supplier, supplier)),
+                client=info.get("client", "-"),
+                market=info.get("market", "-"),
+                month=info.get("month", "-"),
+                year=info.get("year", "-"),
+                status=f"SKIPPED - copy error: {e}",
+            ))
+
+    write_report(report_rows)
+
+    elapsed = perf_counter() - start
+
+    print()
+    log("DONE", "Sorting complete")
+    print_sort_summary(stats, elapsed)
+    print(SEP)
 
 
 if __name__ == "__main__":

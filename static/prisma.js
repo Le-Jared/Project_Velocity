@@ -17,10 +17,12 @@
     selectedPlans: new Set(),
     status: null,
     pendingDeleteFiles: [],
+    geminiEnabled: true,
     els: {},
 
     init() {
       this.cacheElements();
+      this.initGeminiToggle();
 
       if (!this.els.planList) {
         console.warn("[PRISMA] Prisma tab elements not found.");
@@ -71,6 +73,7 @@
         "prismaMatchTable",
         "prismaMatchTableBody",
         "prismaLog",
+        "prismaClearLogBtn",
         "prismaToastContainer",
         "prismaDeleteModal",
         "prismaDeleteModalText",
@@ -131,6 +134,7 @@
       this.els.matchTableBody = $("#prismaMatchTableBody");
 
       this.els.logBox = $("#prismaLog");
+      this.els.clearLogBtn = $("#prismaClearLogBtn");
       this.els.toastContainer = $("#prismaToastContainer");
 
       this.els.deleteModal = $("#prismaDeleteModal");
@@ -138,6 +142,10 @@
       this.els.deleteFileList = $("#prismaDeleteFileList");
       this.els.deleteCancelBtn = $("#prismaDeleteCancelBtn");
       this.els.deleteConfirmBtn = $("#prismaDeleteConfirmBtn");
+
+      this.els.geminiToggleBtn = $("#geminiToggleBtn");
+      this.els.geminiToggleText = $("#geminiToggleText");
+      this.els.geminiToggleDot = $("#geminiToggleDot");
     },
 
     bindEvents() {
@@ -145,6 +153,8 @@
       this.els.buyingGuideUploadBtn?.addEventListener("click", () => this.uploadReferenceFile("buyingGuide"));
       this.els.templateUploadBtn?.addEventListener("click", () => this.uploadReferenceFile("template"));
       this.els.convertSelectedBtn?.addEventListener("click", () => this.convertSelectedPlans());
+      this.els.clearLogBtn?.addEventListener("click", () => this.clearLog());
+      this.els.geminiToggleBtn?.addEventListener("click", () => this.toggleGemini());
 
       this.bindReferencePicker(this.els.buyingGuideInput, this.els.buyingGuideSelectedWrap, this.els.buyingGuideSelectedName, "Buying Guide");
       this.bindReferencePicker(this.els.templateInput, this.els.templateSelectedWrap, this.els.templateSelectedName, "Prisma Template");
@@ -177,6 +187,41 @@
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") this.closeDeleteModal();
       });
+    },
+
+    initGeminiToggle() {
+      const stored = localStorage.getItem("prismaGeminiEnabled");
+      this.geminiEnabled = stored === null ? true : stored === "true";
+      this.renderGeminiToggle();
+    },
+
+    toggleGemini() {
+      this.geminiEnabled = !this.geminiEnabled;
+      localStorage.setItem("prismaGeminiEnabled", String(this.geminiEnabled));
+      this.renderGeminiToggle();
+
+      const message = this.geminiEnabled
+        ? "Gemini enabled for Prisma conversions."
+        : "Gemini disabled for Prisma conversions.";
+
+      this.toast(message, this.geminiEnabled ? "info" : "warn");
+      this.log(message, this.geminiEnabled ? "info" : "warn");
+    },
+
+    renderGeminiToggle() {
+      if (!this.els.geminiToggleBtn || !this.els.geminiToggleText || !this.els.geminiToggleDot) return;
+
+      if (this.geminiEnabled) {
+        this.els.geminiToggleText.textContent = "Gemini On";
+        this.els.geminiToggleDot.className = "pulse-dot bg-violet-400";
+        this.els.geminiToggleBtn.className =
+          "flex items-center gap-1.5 text-xs font-semibold text-violet-300 bg-violet-500 bg-opacity-10 border border-violet-500 border-opacity-30 px-2.5 py-1 rounded-full hover:bg-opacity-20 transition";
+      } else {
+        this.els.geminiToggleText.textContent = "Gemini Off";
+        this.els.geminiToggleDot.className = "pulse-dot bg-gray-500";
+        this.els.geminiToggleBtn.className =
+          "flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-gray-800 border border-gray-700 px-2.5 py-1 rounded-full hover:bg-gray-700 transition";
+      }
     },
 
     bindReferencePicker(input, wrap, nameEl, label) {
@@ -227,6 +272,13 @@
 
       this.els.logBox.appendChild(div);
       this.els.logBox.scrollTop = this.els.logBox.scrollHeight;
+    },
+
+    clearLog() {
+      if (!this.els.logBox) return;
+
+      this.els.logBox.innerHTML = "";
+      this.toast("Prisma log cleared.", "info");
     },
 
     logBackendDiagnostics(filename, data = {}) {
@@ -645,7 +697,7 @@
 
       return {
         filename,
-        use_gemini: this.els.useGemini ? Boolean(this.els.useGemini.checked) : true,
+        use_gemini: Boolean(this.geminiEnabled),
         skip_unmatched_buying_guide: this.els.skipUnmatched ? Boolean(this.els.skipUnmatched.checked) : true,
         ...(clientMode !== "AUTO" ? { client: clientMode } : {}),
       };
