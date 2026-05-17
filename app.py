@@ -10,28 +10,34 @@ import zipfile
 import subprocess
 import threading
 
-from flask import Flask, render_template, jsonify, request, Response, stream_with_context, send_file
+from flask import (
+    Flask,
+    render_template,
+    jsonify,
+    request,
+    Response,
+    stream_with_context,
+    send_file,
+)
 from werkzeug.utils import secure_filename
-
-from run_workflow import BASE_DIR
 
 
 app = Flask(__name__)
 
-INVOICE_FOLDER = "./invoices"
-INPUT_FOLDER = "./Input"
-OUTPUT_FOLDER = "./Output"
-CLIENTS_FOLDER = "./Clients"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+INVOICE_FOLDER = os.path.join(BASE_DIR, "invoices")
+INPUT_FOLDER = os.path.join(BASE_DIR, "Input")
+OUTPUT_FOLDER = os.path.join(BASE_DIR, "Output")
+CLIENTS_FOLDER = os.path.join(BASE_DIR, "Clients")
 
 TRACKER_INPUT = os.path.join(INPUT_FOLDER, "ACCT-108 Master Invoice Tracker 2026.xlsx")
 TRACKER_OUTPUT = os.path.join(OUTPUT_FOLDER, "ACCT-108 Master Invoice Tracker 2026 - Updated.xlsx")
 REPORT_PATH = os.path.join(OUTPUT_FOLDER, "invoice_sort_report.csv")
-CREDENTIALS = "credentials.json"
-DRIVE_CONFIG = "drive_config.json"
+CREDENTIALS = os.path.join(BASE_DIR, "credentials.json")
+DRIVE_CONFIG = os.path.join(BASE_DIR, "drive_config.json")
 
-ALLOWED_EXTENSIONS = {"pdf"}
-
-MEDIA_PLANS_FOLDER = "./media_plans"
+MEDIA_PLANS_FOLDER = os.path.join(BASE_DIR, "media_plans")
 PRISMA_OUTPUT_DIR = os.path.join(OUTPUT_FOLDER, "prisma")
 BUYING_GUIDE_PATH = os.path.join(INPUT_FOLDER, "ACCT 108 BuyingGuide.xlsx")
 PRISMA_TEMPLATE = os.path.join(
@@ -39,6 +45,12 @@ PRISMA_TEMPLATE = os.path.join(
     "ACCT-108 DIGITAL TEMPLATE MEDIA PLAN IMPORT placements.xlsx",
 )
 
+ALLOWED_EXTENSIONS = {"pdf"}
+
+os.makedirs(INVOICE_FOLDER, exist_ok=True)
+os.makedirs(INPUT_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+os.makedirs(CLIENTS_FOLDER, exist_ok=True)
 os.makedirs(MEDIA_PLANS_FOLDER, exist_ok=True)
 os.makedirs(PRISMA_OUTPUT_DIR, exist_ok=True)
 
@@ -51,20 +63,15 @@ def allowed_plan_file(filename):
     return filename.lower().endswith((".xlsx", ".xls"))
 
 
-def pathlib_path(p):
-    from pathlib import Path
-    return Path(p)
-
-
 def gemini_available():
     if os.environ.get("GEMINI_API_KEY", "").strip():
         return True
 
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    env_path = os.path.join(BASE_DIR, ".env")
 
     if os.path.exists(env_path):
         try:
-            with open(env_path) as f:
+            with open(env_path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
 
@@ -81,8 +88,11 @@ def gemini_available():
 
 def stream_script(script_name, q):
     try:
+        script_path = os.path.join(BASE_DIR, script_name)
+
         proc = subprocess.Popen(
-            [sys.executable, script_name],
+            [sys.executable, script_path],
+            cwd=BASE_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -114,7 +124,11 @@ def run_and_stream(script_name):
 
                 if line.startswith("__EXIT__"):
                     code = line.replace("__EXIT__", "")
-                    msg = "[DONE] Script finished (exit 0)." if code == "0" else f"[ERR] Script exited with code {code}."
+                    msg = (
+                        "[DONE] Script finished (exit 0)."
+                        if code == "0"
+                        else f"[ERR] Script exited with code {code}."
+                    )
                     yield msg + "\n"
                     break
 
@@ -144,10 +158,9 @@ def status():
     pdf_count = 0
 
     if os.path.exists(INVOICE_FOLDER):
-        for root, _, files in os.walk(INVOICE_FOLDER):
+        for _, _, files in os.walk(INVOICE_FOLDER):
             pdf_count += sum(1 for f in files if f.lower().endswith(".pdf"))
 
-    client_folders = 0
     client_list = []
 
     if os.path.exists(CLIENTS_FOLDER):
@@ -155,7 +168,6 @@ def status():
             d for d in os.listdir(CLIENTS_FOLDER)
             if os.path.isdir(os.path.join(CLIENTS_FOLDER, d))
         ]
-        client_folders = len(client_list)
 
     supplier_counts = {
         "Meta": 0,
@@ -165,7 +177,7 @@ def status():
     }
 
     if os.path.exists(CLIENTS_FOLDER):
-        for root, _, files in os.walk(CLIENTS_FOLDER):
+        for _, _, files in os.walk(CLIENTS_FOLDER):
             for f in files:
                 if not f.lower().endswith(".pdf"):
                     continue
@@ -189,7 +201,7 @@ def status():
 
     if os.path.exists(DRIVE_CONFIG):
         try:
-            with open(DRIVE_CONFIG) as f:
+            with open(DRIVE_CONFIG, encoding="utf-8") as f:
                 cfg = json.load(f)
 
             folder_id_set = bool(cfg.get("root_folder_id", "").strip())
@@ -198,7 +210,7 @@ def status():
 
     return jsonify({
         "pdf_count": pdf_count,
-        "client_folders": client_folders,
+        "client_folders": len(client_list),
         "client_list": client_list,
         "supplier_counts": supplier_counts,
         "tracker_exists": tracker_exists,
@@ -299,8 +311,6 @@ def upload():
     if "files" not in request.files:
         return jsonify({"error": "No files provided"}), 400
 
-    os.makedirs(INVOICE_FOLDER, exist_ok=True)
-
     saved = []
     errors = []
 
@@ -332,8 +342,6 @@ def upload_tracker():
     if not f.filename.endswith(".xlsx"):
         return jsonify({"error": "Only .xlsx files accepted"}), 400
 
-    os.makedirs(INPUT_FOLDER, exist_ok=True)
-
     if os.path.exists(TRACKER_INPUT):
         backup_name = os.path.join(
             INPUT_FOLDER,
@@ -360,8 +368,6 @@ def upload_buying_guide():
 
     if not f.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Only .xlsx files accepted"}), 400
-
-    os.makedirs(INPUT_FOLDER, exist_ok=True)
 
     if os.path.exists(BUYING_GUIDE_PATH):
         backup = os.path.join(
@@ -404,8 +410,6 @@ def upload_prisma_template():
 
     if not f.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Only .xlsx files accepted"}), 400
-
-    os.makedirs(INPUT_FOLDER, exist_ok=True)
 
     if os.path.exists(PRISMA_TEMPLATE):
         backup = os.path.join(
@@ -476,7 +480,7 @@ def get_drive_config():
     if not os.path.exists(DRIVE_CONFIG):
         return jsonify({"root_folder_id": ""})
 
-    with open(DRIVE_CONFIG) as f:
+    with open(DRIVE_CONFIG, encoding="utf-8") as f:
         return jsonify(json.load(f))
 
 
@@ -488,7 +492,7 @@ def save_drive_config():
     if not folder_id:
         return jsonify({"error": "Folder ID cannot be empty"}), 400
 
-    with open(DRIVE_CONFIG, "w") as f:
+    with open(DRIVE_CONFIG, "w", encoding="utf-8") as f:
         json.dump({"root_folder_id": folder_id}, f)
 
     return jsonify({
@@ -535,7 +539,7 @@ def download_clients_zip():
     zip_buffer = io.BytesIO()
 
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for dirpath, dirnames, filenames in os.walk(CLIENTS_FOLDER):
+        for dirpath, _, filenames in os.walk(CLIENTS_FOLDER):
             for filename in filenames:
                 file_path = os.path.join(dirpath, filename)
                 arcname = os.path.relpath(file_path, os.path.dirname(CLIENTS_FOLDER))
@@ -586,76 +590,36 @@ def clear_workspace():
 
     errors = []
 
-    invoices_dir = os.path.join(BASE_DIR, "invoices")
+    folders = [
+        ("invoices", INVOICE_FOLDER, ".pdf"),
+        ("client_files", CLIENTS_FOLDER, None),
+        ("output_files", OUTPUT_FOLDER, None),
+        ("input_files", INPUT_FOLDER, None),
+        ("media_plans", MEDIA_PLANS_FOLDER, None),
+    ]
 
-    if os.path.exists(invoices_dir):
-        for f in os.listdir(invoices_dir):
-            if f.lower().endswith(".pdf"):
-                try:
-                    os.remove(os.path.join(invoices_dir, f))
-                    deleted["invoices"] += 1
-                except Exception as e:
-                    errors.append(str(e))
+    for key, folder, extension_filter in folders:
+        if not os.path.exists(folder):
+            continue
 
-    clients_dir = os.path.join(BASE_DIR, "Clients")
-
-    if os.path.exists(clients_dir):
-        for item in os.listdir(clients_dir):
+        for item in os.listdir(folder):
             if item == ".gitkeep":
                 continue
 
-            item_path = os.path.join(clients_dir, item)
-
-            try:
-                shutil.rmtree(item_path) if os.path.isdir(item_path) else os.remove(item_path)
-                deleted["client_files"] += 1
-            except Exception as e:
-                errors.append(str(e))
-
-    output_dir = os.path.join(BASE_DIR, "Output")
-
-    if os.path.exists(output_dir):
-        for item in os.listdir(output_dir):
-            if item == ".gitkeep":
+            if extension_filter and not item.lower().endswith(extension_filter):
                 continue
 
-            item_path = os.path.join(output_dir, item)
+            item_path = os.path.join(folder, item)
 
             try:
-                shutil.rmtree(item_path) if os.path.isdir(item_path) else os.remove(item_path)
-                deleted["output_files"] += 1
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
+
+                deleted[key] += 1
             except Exception as e:
-                errors.append(str(e))
-
-    input_dir = os.path.join(BASE_DIR, "Input")
-
-    if os.path.exists(input_dir):
-        for item in os.listdir(input_dir):
-            if item == ".gitkeep":
-                continue
-
-            item_path = os.path.join(input_dir, item)
-
-            try:
-                shutil.rmtree(item_path) if os.path.isdir(item_path) else os.remove(item_path)
-                deleted["input_files"] += 1
-            except Exception as e:
-                errors.append(str(e))
-
-    media_dir = os.path.join(BASE_DIR, "media_plans")
-
-    if os.path.exists(media_dir):
-        for item in os.listdir(media_dir):
-            if item == ".gitkeep":
-                continue
-
-            item_path = os.path.join(media_dir, item)
-
-            try:
-                shutil.rmtree(item_path) if os.path.isdir(item_path) else os.remove(item_path)
-                deleted["media_plans"] += 1
-            except Exception as e:
-                errors.append(str(e))
+                errors.append(f"{item}: {e}")
 
     return jsonify({
         "message": (
@@ -758,8 +722,6 @@ def prisma_upload():
     if not files:
         return jsonify({"error": "No files provided"}), 400
 
-    os.makedirs(MEDIA_PLANS_FOLDER, exist_ok=True)
-
     saved = []
     errors = []
 
@@ -818,19 +780,46 @@ def prisma_convert():
 
     filename = data.get("filename")
     forced_client = (data.get("client") or "").strip().upper()
+    use_gemini = bool(data.get("use_gemini", False))
+    skip_unmatched = bool(data.get("skip_unmatched_buying_guide", False))
+
+    logs = []
+    warnings = []
+    diagnostics = {}
+
+    def add_log(message):
+        text = str(message)
+        logs.append(text)
+        print(f"[PRISMA] {text}")
 
     if not filename:
-        return jsonify({"error": "filename required"}), 400
+        return jsonify({
+            "ok": False,
+            "error": "filename required",
+            "logs": logs,
+            "warnings": warnings,
+            "diagnostics": diagnostics,
+        }), 400
 
     safe_filename = secure_filename(filename)
     media_plan_path = os.path.join(MEDIA_PLANS_FOLDER, safe_filename)
 
     if not os.path.exists(media_plan_path):
-        return jsonify({"error": f"file not found: {safe_filename}"}), 404
+        return jsonify({
+            "ok": False,
+            "error": f"file not found: {safe_filename}",
+            "logs": logs,
+            "warnings": warnings,
+            "diagnostics": diagnostics,
+        }), 404
 
     if not os.path.exists(BUYING_GUIDE_PATH):
         return jsonify({
-            "error": "Buying Guide missing — upload it via the Reference Files card"
+            "ok": False,
+            "error": "Buying Guide missing — upload it via the Reference Files card",
+            "logs": logs,
+            "warnings": warnings,
+            "diagnostics": diagnostics,
         }), 400
 
     os.makedirs(PRISMA_OUTPUT_DIR, exist_ok=True)
@@ -838,14 +827,8 @@ def prisma_convert():
     base_name = os.path.splitext(safe_filename)[0]
 
     try:
-        from plan_parser import parse_media_plan, detect_client
-        from plan_adapters import adapt_media_plan, consolidate_for_prisma
-        from buying_guide import (
-            load_buying_guide,
-            enrich_with_buying_guide,
-            preview_buying_guide_matches,
-        )
-        from prisma_builder import export_prisma_import, export_debug_files
+        from plan_parser import detect_client
+        from run_media import run_media_plan_to_prisma
 
         detected_client = detect_client(media_plan_path)
         client = (forced_client or detected_client or "GU").upper()
@@ -853,42 +836,39 @@ def prisma_convert():
         output_filename = f"{client}_{base_name}_prisma_import.xlsx"
         output_path = os.path.join(PRISMA_OUTPUT_DIR, output_filename)
 
-        print("[PRISMA] Reading media plan...")
-        raw_df = parse_media_plan(media_plan_path)
+        diagnostics.update({
+            "filename": safe_filename,
+            "detected_client": detected_client,
+            "forced_client": forced_client or None,
+            "client": client,
+            "use_gemini": use_gemini,
+            "skip_unmatched_buying_guide": skip_unmatched,
+        })
 
-        print("[PRISMA] Normalizing media plan...")
-        normalized_df = adapt_media_plan(raw_df, client=client)
+        add_log(f"Starting conversion for {safe_filename}")
+        add_log(f"Client: {client}")
+        add_log(f"Gemini fallback: {'enabled' if use_gemini else 'disabled'}")
+        add_log(f"Skip unmatched Buying Guide rows: {'enabled' if skip_unmatched else 'disabled'}")
 
-        print("[PRISMA] Consolidating placements...")
-        consolidated_df = consolidate_for_prisma(normalized_df)
-
-        print("[PRISMA] Loading Buying Guide...")
-        guide_df = load_buying_guide(BUYING_GUIDE_PATH)
-
-        print("[PRISMA] Previewing matches...")
-        preview_df = preview_buying_guide_matches(consolidated_df, guide_df)
-
-        print("[PRISMA] Enriching with Buying Guide...")
-        enriched_df = enrich_with_buying_guide(consolidated_df, guide_df)
-
-        print("[PRISMA] Exporting debug files...")
-        debug_dir = os.path.join(PRISMA_OUTPUT_DIR, "debug", base_name)
-
-        export_debug_files(
-            raw_df=raw_df,
-            normalized_df=normalized_df,
-            consolidated_df=consolidated_df,
-            enriched_df=enriched_df,
-            output_dir=debug_dir,
+        result = run_media_plan_to_prisma(
+            media_plan_path=media_plan_path,
+            buying_guide_path=BUYING_GUIDE_PATH,
+            output_path=output_path,
+            client=client,
+            debug=True,
+            use_gemini=use_gemini,
+            skip_unmatched_buying_guide=skip_unmatched,
         )
 
-        print("[PRISMA] Exporting Prisma import...")
-        final_path = export_prisma_import(enriched_df, output_path)
+        logs.extend(result.get("logs", []))
+        warnings.extend(result.get("warnings", []))
+        diagnostics.update(result.get("diagnostics", {}))
 
-        unmatched = []
+        final_output_file = result.get("output_file") or output_filename
+        preview_records = result.get("preview", [])
+
         matched_count = 0
-
-        preview_records = preview_df.to_dict(orient="records")
+        unmatched = []
 
         for record in preview_records:
             status = str(record.get("status", ""))
@@ -903,17 +883,21 @@ def prisma_convert():
             "client": client,
             "detected_client": detected_client,
             "forced_client": forced_client or None,
-            "adapter": "Media Plan Pipeline",
-            "placement_count": len(consolidated_df),
+            "adapter": "run_media.py",
+            "placement_count": diagnostics.get("consolidated_rows"),
             "matched_count": matched_count,
             "unmatched_channels": unmatched,
-            "output_file": os.path.basename(final_path),
-            "download_url": f"/api/prisma/download/{os.path.basename(final_path)}",
+            "output_file": final_output_file,
+            "download_url": f"/api/prisma/download/{final_output_file}",
             "preview": preview_records,
+            "logs": logs,
+            "warnings": warnings,
+            "diagnostics": diagnostics,
         })
 
     except Exception as e:
-        print(f"[PRISMA ERROR] {e}")
+        error_message = str(e)
+        add_log(f"Conversion failed: {error_message}")
 
         try:
             from plan_parser import detect_client
@@ -923,12 +907,26 @@ def prisma_convert():
 
         client = (forced_client or detected_client or "GU").upper()
 
-        return jsonify({
-            "error": str(e),
+        diagnostics.update({
             "filename": safe_filename,
             "client": client,
             "detected_client": detected_client,
             "forced_client": forced_client or None,
+            "use_gemini": use_gemini,
+            "skip_unmatched_buying_guide": skip_unmatched,
+        })
+
+        return jsonify({
+            "ok": False,
+            "error": error_message,
+            "message": error_message,
+            "filename": safe_filename,
+            "client": client,
+            "detected_client": detected_client,
+            "forced_client": forced_client or None,
+            "logs": logs,
+            "warnings": warnings,
+            "diagnostics": diagnostics,
         }), 500
 
 

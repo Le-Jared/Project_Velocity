@@ -3,7 +3,7 @@ import re
 import pandas as pd
 
 
-HEADER_KEYWORDS = [
+HEADER_KEYWORDS = {
     "channel",
     "partner",
     "supplier",
@@ -31,10 +31,9 @@ HEADER_KEYWORDS = [
     "clicks",
     "kpi",
     "buy type",
-]
+}
 
-
-ANCHOR_KEYWORDS = [
+ANCHOR_KEYWORDS = {
     "channel",
     "partner",
     "supplier",
@@ -44,10 +43,9 @@ ANCHOR_KEYWORDS = [
     "campaign name",
     "placement",
     "placement name",
-]
+}
 
-
-METRIC_KEYWORDS = [
+METRIC_KEYWORDS = {
     "budget",
     "gross media",
     "net media",
@@ -62,68 +60,105 @@ METRIC_KEYWORDS = [
     "flight end",
     "campaign start",
     "campaign end",
+}
+
+BUDGET_KEYWORDS = {
+    "budget",
+    "media budget",
+    "gross media",
+    "net media",
+    "planned cost",
+    "cost",
+    "spend",
+}
+
+DATE_KEYWORDS = {
+    "start",
+    "start date",
+    "campaign start",
+    "flight start",
+    "end",
+    "end date",
+    "campaign end",
+    "flight end",
+}
+
+PERFORMANCE_NOISE_KEYWORDS = {
+    "search impr",
+    "search lost",
+    "conv rate",
+    "conversion rate",
+    "quality score",
+    "ctr",
+    "avg cpc",
+    "campaign status",
+    "ad group status",
+}
+
+TEXT_COLUMNS = [
+    "Channel",
+    "Partner",
+    "Supplier",
+    "Platform",
+    "Publisher",
+    "Campaign Name",
+    "Campaign",
+    "Placement Name",
+    "Placement",
+]
+
+CLIENT_RULES = [
+    ("GU", lambda name, tokens: "skillignition" in name or ("skill" in tokens and "ignition" in tokens) or "gu" in tokens),
+    ("MI", lambda name, tokens: "mi" in tokens),
+    ("MCP", lambda name, tokens: "mcp" in tokens or {"2026", "media", "plan"}.issubset(tokens)),
 ]
 
 
-def _clean_column_name(value):
+def clean_text(value):
     if pd.isna(value):
         return ""
 
-    text = str(value).replace("\n", " ").strip()
-    text = re.sub(r"\s+", " ", text)
-
-    return text
+    return re.sub(r"\s+", " ", str(value).replace("\n", " ").strip())
 
 
-def _normalize_header_text(value):
-    return _clean_column_name(value).lower()
+def normalize_text(value):
+    return clean_text(value).lower()
 
 
-def _row_values(row):
-    return [
-        _normalize_header_text(value)
-        for value in row.tolist()
-        if not pd.isna(value) and _clean_column_name(value) != ""
-    ]
+def row_values(row):
+    return [normalize_text(value) for value in row.tolist() if clean_text(value)]
 
 
-def _row_text(row):
-    return " | ".join(_row_values(row))
+def row_text(row):
+    return " | ".join(row_values(row))
 
 
-def _row_contains_terms(row, required_terms):
-    row_text = _row_text(row)
-    return all(term.lower() in row_text for term in required_terms)
+def contains_all(row, terms):
+    text = row_text(row)
+    return all(str(term).lower() in text for term in terms)
 
 
-def _score_header_row(row):
-    values = _row_values(row)
+def score_header_row(row):
+    values = row_values(row)
 
     if not values:
         return 0
 
-    joined = " | ".join(values)
+    text = " | ".join(values)
+    score = sum(1 for keyword in HEADER_KEYWORDS if keyword in text)
 
-    score = 0
+    has_anchor = any(keyword in text for keyword in ANCHOR_KEYWORDS)
+    has_metric = any(keyword in text for keyword in METRIC_KEYWORDS)
+    has_budget = any(keyword in text for keyword in BUDGET_KEYWORDS)
+    has_date = any(keyword in text for keyword in DATE_KEYWORDS)
 
-    for keyword in HEADER_KEYWORDS:
-        if keyword in joined:
-            score += 1
-
-    has_anchor = any(keyword in joined for keyword in ANCHOR_KEYWORDS)
-    has_metric = any(keyword in joined for keyword in METRIC_KEYWORDS)
-
-    if has_anchor:
-        score += 5
-
-    if has_metric:
-        score += 5
-
-    if len(values) >= 4:
-        score += 2
-
-    if len(values) >= 6:
-        score += 2
+    score += 6 if has_anchor else 0
+    score += 5 if has_metric else 0
+    score += 4 if has_budget else 0
+    score += 3 if has_date else 0
+    score += 2 if len(values) >= 4 else 0
+    score += 2 if len(values) >= 6 else 0
+    score -= sum(2 for keyword in PERFORMANCE_NOISE_KEYWORDS if keyword in text)
 
     return score
 
@@ -131,54 +166,72 @@ def _score_header_row(row):
 def find_header_row(raw_df, required_terms=None):
     if required_terms:
         for idx, row in raw_df.iterrows():
-            if _row_contains_terms(row, required_terms):
+            if contains_all(row, required_terms):
                 return idx
 
-    best_idx = None
-    best_score = 0
+    scored = [(idx, score_header_row(row)) for idx, row in raw_df.iterrows()]
+    best_idx, best_score = max(scored, key=lambda item: item[1], default=(None, 0))
 
-    for idx, row in raw_df.iterrows():
-        score = _score_header_row(row)
-
-        if score > best_score:
-            best_idx = idx
-            best_score = score
-
-    if best_score >= 10:
-        return best_idx
-
-    return None
+    return best_idx if best_score >= 12 else None
 
 
-def _dedupe_headers(headers):
+def dedupe_headers(headers):
     seen = {}
     result = []
 
     for header in headers:
-        clean = _clean_column_name(header)
+        clean = clean_text(header)
 
-        if clean == "":
+        if not clean:
             result.append("")
             continue
 
-        count = seen.get(clean, 0) + 1
-        seen[clean] = count
-
-        if count == 1:
-            result.append(clean)
-        else:
-            result.append(f"{clean}__{count}")
+        seen[clean] = seen.get(clean, 0) + 1
+        result.append(clean if seen[clean] == 1 else f"{clean}__{seen[clean]}")
 
     return result
 
 
-def _looks_like_repeated_header(row):
-    values = [_normalize_header_text(value) for value in row.tolist()]
-    joined = " | ".join(values)
+def looks_like_repeated_header(row):
+    text = row_text(row)
+    return sum(1 for keyword in ANCHOR_KEYWORDS if keyword in text) >= 2
 
-    hits = sum(1 for keyword in ANCHOR_KEYWORDS if keyword in joined)
 
-    return hits >= 2
+def remove_total_rows(data):
+    text_col = next((col for col in TEXT_COLUMNS if col in data.columns), None)
+
+    if not text_col:
+        return data
+
+    mask = data[text_col].astype(str).str.lower().str.contains("total|subtotal|grand total", na=False)
+
+    return data[~mask]
+
+
+def parse_sheet(raw_df, sheet_name, file_name, required_terms=None):
+    header_idx = find_header_row(raw_df, required_terms=required_terms)
+
+    if header_idx is None:
+        return None
+
+    data = raw_df.iloc[header_idx + 1:].copy()
+    data.columns = dedupe_headers(raw_df.iloc[header_idx].tolist())
+    data = data.loc[:, [col for col in data.columns if col]]
+    data = data.dropna(how="all")
+
+    if data.empty:
+        return None
+
+    data = data[~data.apply(looks_like_repeated_header, axis=1)]
+    data = remove_total_rows(data)
+
+    if data.empty:
+        return None
+
+    data["source_sheet"] = sheet_name
+    data["source_file"] = file_name
+
+    return data
 
 
 def parse_media_plan(file_path, required_terms=None):
@@ -187,98 +240,31 @@ def parse_media_plan(file_path, required_terms=None):
     if not file_path.exists():
         raise FileNotFoundError(f"Media plan not found: {file_path}")
 
-    sheets = pd.read_excel(
-        file_path,
-        sheet_name=None,
-        header=None,
-        engine="openpyxl",
-    )
+    sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
 
-    parsed_tables = []
+    tables = [
+        table
+        for sheet_name, raw_df in sheets.items()
+        for table in [parse_sheet(raw_df, sheet_name, file_path.name, required_terms)]
+        if table is not None and not table.empty
+    ]
 
-    for sheet_name, raw_df in sheets.items():
-        header_idx = find_header_row(raw_df, required_terms=required_terms)
-
-        if header_idx is None:
-            continue
-
-        raw_headers = raw_df.iloc[header_idx].tolist()
-        headers = _dedupe_headers(raw_headers)
-
-        data = raw_df.iloc[header_idx + 1:].copy()
-        data.columns = headers
-
-        data = data.loc[:, [col for col in data.columns if col != ""]]
-        data = data.dropna(how="all")
-
-        data = data[
-            ~data.apply(_looks_like_repeated_header, axis=1)
-        ]
-
-        first_text_col = None
-
-        for candidate in [
-            "Channel",
-            "Partner",
-            "Supplier",
-            "Platform",
-            "Publisher",
-            "Campaign Name",
-            "Campaign",
-        ]:
-            if candidate in data.columns:
-                first_text_col = candidate
-                break
-
-        if first_text_col:
-            data = data[
-                ~data[first_text_col]
-                .astype(str)
-                .str.lower()
-                .str.contains("total|subtotal|grand total", na=False)
-            ]
-
-        data["source_sheet"] = sheet_name
-        data["source_file"] = file_path.name
-
-        if not data.empty:
-            parsed_tables.append(data)
-
-    if not parsed_tables:
+    if not tables:
         raise ValueError(
             "No media placement table found. "
             "Could not locate a header row containing channel/partner/campaign/placement plus budget/date metrics."
         )
 
-    result = pd.concat(parsed_tables, ignore_index=True)
-
-    return result
+    return pd.concat(tables, ignore_index=True)
 
 
 def detect_client(file_path):
     name = Path(file_path).stem.lower()
+    normalized = re.sub(r"[_\-.]+", " ", name)
+    tokens = set(normalized.split())
 
-    normalized = (
-        name.replace("_", " ")
-        .replace("-", " ")
-        .replace(".", " ")
-    )
-
-    tokens = normalized.split()
-
-    if "skillignition" in name or ("skill" in tokens and "ignition" in tokens):
-        return "GU"
-
-    if "gu" in tokens:
-        return "GU"
-
-    if "mi" in tokens:
-        return "MI"
-
-    if "mcp" in tokens:
-        return "MCP"
-
-    if "2026" in tokens and "media" in tokens and "plan" in tokens:
-        return "MCP"
+    for client, rule in CLIENT_RULES:
+        if rule(name, tokens):
+            return client
 
     return None
