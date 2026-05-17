@@ -129,7 +129,7 @@ CANONICAL_PARTNERS = {
     "discovery": "Google Demand Gen",
 
     "google youtube": "Google Youtube",
-    "google youtube": "Google Youtube",
+    "google you tube": "Google Youtube",
     "youtube": "Google Youtube",
     "you tube": "Google Youtube",
     "yt": "Google Youtube",
@@ -748,7 +748,8 @@ def _apply_placement_value(placement, field: str, value: Any) -> None:
         return
 
     setattr(placement, field, value)
-    
+
+
 def build_buying_guide_gap_report(
     preview_errors: list[dict],
     consolidated_records: list[dict] | None = None,
@@ -841,6 +842,7 @@ Your job:
 - Suggest what Buying Guide row may need to be added.
 - Do not invent supplier codes.
 - Do not invent supplier IDs.
+- Do not invent supplier names.
 - Do not invent financial buy type.
 - Do not invent buy category.
 - Do not approve the row.
@@ -862,6 +864,8 @@ Each object must contain exactly these keys:
 - evidence_summary
 - required_human_action
 - do_not_auto_export_reason
+- suggested_buying_guide_row_status
+- safe_to_auto_export
 
 Rules:
 - suggested_cost_method should usually be CPM unless evidence suggests otherwise.
@@ -870,6 +874,8 @@ Rules:
 - suggested_aliases must be a short comma-separated string.
 - required_human_action must tell the user to add an approved Buying Guide row.
 - do_not_auto_export_reason must explain that supplier code/name and finance fields must come from the official Buying Guide.
+- suggested_buying_guide_row_status must be "Needs finance approval".
+- safe_to_auto_export must be "No".
 - Return only JSON.
 
 Input:
@@ -893,13 +899,15 @@ def _clean_gap_recommendation(item: dict) -> dict:
         "client": client,
         "missing_partner": missing_partner,
         "suggested_placement_booking_type": _safe_str(item.get("suggested_placement_booking_type")) or missing_partner,
-        "suggested_aliases": _safe_str(item.get("suggested_aliases")),
+        "suggested_aliases": _safe_str(item.get("suggested_aliases")) or _default_aliases_for_partner(missing_partner),
         "suggested_cost_method": _safe_str(item.get("suggested_cost_method")).upper() or "CPM",
         "suggested_unit_type": _safe_str(item.get("suggested_unit_type")) or "Impressions",
         "confidence": confidence,
         "evidence_summary": _safe_str(item.get("evidence_summary")),
         "required_human_action": _safe_str(item.get("required_human_action")) or "Add an approved Buying Guide row for this client and partner.",
         "do_not_auto_export_reason": _safe_str(item.get("do_not_auto_export_reason")) or "Supplier code, supplier name, financial buy type, currency, and finance fields must come from the official Buying Guide.",
+        "suggested_buying_guide_row_status": "Needs finance approval",
+        "safe_to_auto_export": "No",
     }
 
 
@@ -927,6 +935,8 @@ def _deterministic_gap_report(preview_errors: list[dict]) -> list[dict]:
                 "evidence_summary": f"Buying Guide matching failed for client={client}, partner={partner}.",
                 "required_human_action": "Add an approved Buying Guide row for this client and partner.",
                 "do_not_auto_export_reason": "Supplier code, supplier name, financial buy type, currency, and finance fields must come from the official Buying Guide.",
+                "suggested_buying_guide_row_status": "Needs finance approval",
+                "safe_to_auto_export": "No",
             }
         )
 
@@ -951,4 +961,3 @@ def _default_aliases_for_partner(partner: str) -> str:
     }
 
     return aliases.get(partner, partner)
-

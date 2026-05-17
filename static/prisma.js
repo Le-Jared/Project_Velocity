@@ -10,10 +10,7 @@
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
 
-  const isExcelFile = (file) => {
-    const name = String(file?.name || "").toLowerCase();
-    return name.endsWith(".xlsx") || name.endsWith(".xls");
-  };
+  const isExcelFile = (file) => /\.(xlsx|xls)$/i.test(String(file?.name || ""));
 
   const PrismaUI = {
     plans: [],
@@ -36,60 +33,111 @@
     },
 
     cacheElements() {
-      this.els = {
-        planInput: $("#prismaPlanInput"),
-        dropZone: $("#prismaDropZone"),
-        uploadBadge: $("#prismaUploadBadge"),
-        uploadStatus: $("#prismaUploadStatus"),
-        uploadStatusText: $("#prismaUploadStatusText"),
-        uploadStatusCount: $("#prismaUploadStatusCount"),
-        uploadProgress: $("#prismaUploadProgress"),
+      [
+        "prismaPlanInput",
+        "prismaDropZone",
+        "prismaUploadBadge",
+        "prismaUploadStatus",
+        "prismaUploadStatusText",
+        "prismaUploadStatusCount",
+        "prismaUploadProgress",
+        "buyingGuideInput",
+        "buyingGuideUploadBtn",
+        "buyingGuidePickBtn",
+        "buyingGuideMeta",
+        "buyingGuideSelectedWrap",
+        "buyingGuideSelectedName",
+        "prismaTemplateInput",
+        "prismaTemplateUploadBtn",
+        "prismaTemplatePickBtn",
+        "prismaTemplateMeta",
+        "prismaTemplateSelectedWrap",
+        "prismaTemplateSelectedName",
+        "prismaRefreshStatusBtn",
+        "prismaReadyBadge",
+        "buyingGuideStatus",
+        "prismaTemplateStatus",
+        "prismaClientsStatus",
+        "prismaPlanList",
+        "prismaEmptyPlans",
+        "prismaSelectedCount",
+        "prismaClientMode",
+        "prismaUseGemini",
+        "prismaSkipUnmatched",
+        "prismaConvertSelectedBtn",
+        "prismaBatchResultPanel",
+        "prismaBatchSummary",
+        "prismaBatchResultList",
+        "prismaMatchTable",
+        "prismaMatchTableBody",
+        "prismaLog",
+        "prismaToastContainer",
+        "prismaDeleteModal",
+        "prismaDeleteModalText",
+        "prismaDeleteFileList",
+        "prismaDeleteCancelBtn",
+        "prismaDeleteConfirmBtn",
+      ].forEach((id) => {
+        const key = id
+          .replace(/^prisma/, "")
+          .replace(/^buyingGuide/, "guide")
+          .replace(/^./, (char) => char.toLowerCase());
 
-        buyingGuideInput: $("#buyingGuideInput"),
-        buyingGuideUploadBtn: $("#buyingGuideUploadBtn"),
-        buyingGuidePickBtn: $("#buyingGuidePickBtn"),
-        buyingGuideMeta: $("#buyingGuideMeta"),
-        buyingGuideSelectedWrap: $("#buyingGuideSelectedWrap"),
-        buyingGuideSelectedName: $("#buyingGuideSelectedName"),
+        this.els[key] = $(`#${id}`);
+      });
 
-        templateInput: $("#prismaTemplateInput"),
-        templateUploadBtn: $("#prismaTemplateUploadBtn"),
-        templatePickBtn: $("#prismaTemplatePickBtn"),
-        templateMeta: $("#prismaTemplateMeta"),
-        templateSelectedWrap: $("#prismaTemplateSelectedWrap"),
-        templateSelectedName: $("#prismaTemplateSelectedName"),
+      this.els.planInput = $("#prismaPlanInput");
+      this.els.dropZone = $("#prismaDropZone");
+      this.els.uploadBadge = $("#prismaUploadBadge");
+      this.els.uploadStatus = $("#prismaUploadStatus");
+      this.els.uploadStatusText = $("#prismaUploadStatusText");
+      this.els.uploadStatusCount = $("#prismaUploadStatusCount");
+      this.els.uploadProgress = $("#prismaUploadProgress");
 
-        refreshStatusBtn: $("#prismaRefreshStatusBtn"),
-        readyBadge: $("#prismaReadyBadge"),
-        guideStatus: $("#buyingGuideStatus"),
-        templateStatus: $("#prismaTemplateStatus"),
-        clientsStatus: $("#prismaClientsStatus"),
+      this.els.buyingGuideInput = $("#buyingGuideInput");
+      this.els.buyingGuideUploadBtn = $("#buyingGuideUploadBtn");
+      this.els.buyingGuidePickBtn = $("#buyingGuidePickBtn");
+      this.els.buyingGuideMeta = $("#buyingGuideMeta");
+      this.els.buyingGuideSelectedWrap = $("#buyingGuideSelectedWrap");
+      this.els.buyingGuideSelectedName = $("#buyingGuideSelectedName");
 
-        planList: $("#prismaPlanList"),
-        emptyPlans: $("#prismaEmptyPlans"),
-        selectedCount: $("#prismaSelectedCount"),
+      this.els.templateInput = $("#prismaTemplateInput");
+      this.els.templateUploadBtn = $("#prismaTemplateUploadBtn");
+      this.els.templatePickBtn = $("#prismaTemplatePickBtn");
+      this.els.templateMeta = $("#prismaTemplateMeta");
+      this.els.templateSelectedWrap = $("#prismaTemplateSelectedWrap");
+      this.els.templateSelectedName = $("#prismaTemplateSelectedName");
 
-        clientMode: $("#prismaClientMode"),
-        useGemini: $("#prismaUseGemini"),
-        skipUnmatched: $("#prismaSkipUnmatched"),
-        convertSelectedBtn: $("#prismaConvertSelectedBtn"),
+      this.els.refreshStatusBtn = $("#prismaRefreshStatusBtn");
+      this.els.readyBadge = $("#prismaReadyBadge");
+      this.els.guideStatus = $("#buyingGuideStatus");
+      this.els.templateStatus = $("#prismaTemplateStatus");
+      this.els.clientsStatus = $("#prismaClientsStatus");
 
-        batchResultPanel: $("#prismaBatchResultPanel"),
-        batchSummary: $("#prismaBatchSummary"),
-        batchResultList: $("#prismaBatchResultList"),
+      this.els.planList = $("#prismaPlanList");
+      this.els.emptyPlans = $("#prismaEmptyPlans");
+      this.els.selectedCount = $("#prismaSelectedCount");
 
-        matchTable: $("#prismaMatchTable"),
-        matchTableBody: $("#prismaMatchTableBody"),
+      this.els.clientMode = $("#prismaClientMode");
+      this.els.useGemini = $("#prismaUseGemini");
+      this.els.skipUnmatched = $("#prismaSkipUnmatched");
+      this.els.convertSelectedBtn = $("#prismaConvertSelectedBtn");
 
-        logBox: $("#prismaLog"),
-        toastContainer: $("#prismaToastContainer"),
+      this.els.batchResultPanel = $("#prismaBatchResultPanel");
+      this.els.batchSummary = $("#prismaBatchSummary");
+      this.els.batchResultList = $("#prismaBatchResultList");
 
-        deleteModal: $("#prismaDeleteModal"),
-        deleteModalText: $("#prismaDeleteModalText"),
-        deleteFileList: $("#prismaDeleteFileList"),
-        deleteCancelBtn: $("#prismaDeleteCancelBtn"),
-        deleteConfirmBtn: $("#prismaDeleteConfirmBtn"),
-      };
+      this.els.matchTable = $("#prismaMatchTable");
+      this.els.matchTableBody = $("#prismaMatchTableBody");
+
+      this.els.logBox = $("#prismaLog");
+      this.els.toastContainer = $("#prismaToastContainer");
+
+      this.els.deleteModal = $("#prismaDeleteModal");
+      this.els.deleteModalText = $("#prismaDeleteModalText");
+      this.els.deleteFileList = $("#prismaDeleteFileList");
+      this.els.deleteCancelBtn = $("#prismaDeleteCancelBtn");
+      this.els.deleteConfirmBtn = $("#prismaDeleteConfirmBtn");
     },
 
     bindEvents() {
@@ -98,40 +146,25 @@
       this.els.templateUploadBtn?.addEventListener("click", () => this.uploadReferenceFile("template"));
       this.els.convertSelectedBtn?.addEventListener("click", () => this.convertSelectedPlans());
 
-      this.bindReferencePicker({
-        input: this.els.buyingGuideInput,
-        wrap: this.els.buyingGuideSelectedWrap,
-        nameEl: this.els.buyingGuideSelectedName,
-        label: "Buying Guide",
-      });
-
-      this.bindReferencePicker({
-        input: this.els.templateInput,
-        wrap: this.els.templateSelectedWrap,
-        nameEl: this.els.templateSelectedName,
-        label: "Prisma Template",
-      });
+      this.bindReferencePicker(this.els.buyingGuideInput, this.els.buyingGuideSelectedWrap, this.els.buyingGuideSelectedName, "Buying Guide");
+      this.bindReferencePicker(this.els.templateInput, this.els.templateSelectedWrap, this.els.templateSelectedName, "Prisma Template");
 
       this.els.planInput?.addEventListener("change", () => {
-        const files = Array.from(this.els.planInput.files || []);
+        const files = [...(this.els.planInput.files || [])];
         if (files.length) this.uploadPlanFiles(files);
       });
 
       this.els.dropZone?.addEventListener("click", () => this.els.planInput?.click());
 
-      this.els.dropZone?.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        this.setDropZoneActive(true);
-      });
+      ["dragover", "dragleave", "drop"].forEach((eventName) => {
+        this.els.dropZone?.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          this.setDropZoneActive(eventName === "dragover");
 
-      this.els.dropZone?.addEventListener("dragleave", () => {
-        this.setDropZoneActive(false);
-      });
-
-      this.els.dropZone?.addEventListener("drop", (event) => {
-        event.preventDefault();
-        this.setDropZoneActive(false);
-        this.uploadPlanFiles(Array.from(event.dataTransfer.files || []));
+          if (eventName === "drop") {
+            this.uploadPlanFiles([...(event.dataTransfer.files || [])]);
+          }
+        });
       });
 
       this.els.deleteCancelBtn?.addEventListener("click", () => this.closeDeleteModal());
@@ -146,7 +179,7 @@
       });
     },
 
-    bindReferencePicker({ input, wrap, nameEl, label }) {
+    bindReferencePicker(input, wrap, nameEl, label) {
       input?.addEventListener("change", () => {
         const file = input.files?.[0];
         if (!file) return;
@@ -159,7 +192,6 @@
 
     async api(url, options = {}) {
       const response = await fetch(url, options);
-
       let data;
 
       try {
@@ -178,21 +210,14 @@
     },
 
     log(message, type = "info") {
-      const prefix = {
-        info: "ℹ",
-        success: "✓",
-        warn: "⚠",
-        error: "✕",
-      }[type] || "ℹ";
+      const styles = {
+        info: ["ℹ", "text-blue-300"],
+        success: ["✓", "text-green-300"],
+        warn: ["⚠", "text-yellow-300"],
+        error: ["✕", "text-red-300"],
+      };
 
-      const colorClass = {
-        info: "text-blue-300",
-        success: "text-green-300",
-        warn: "text-yellow-300",
-        error: "text-red-300",
-      }[type] || "text-gray-400";
-
-      console.log("[PRISMA]", message);
+      const [prefix, colorClass] = styles[type] || styles.info;
 
       if (!this.els.logBox) return;
 
@@ -206,78 +231,67 @@
 
     logBackendDiagnostics(filename, data = {}) {
       const diagnostics = data.diagnostics || {};
+      const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+      const skippedRows = Array.isArray(diagnostics.skipped_buying_guide_rows) ? diagnostics.skipped_buying_guide_rows : [];
+      const previewErrors = Array.isArray(diagnostics.preview_errors) ? diagnostics.preview_errors : [];
 
-      (data.logs || []).forEach((line) => {
-        const text = String(line || "");
+      const outputPath = data.output_path || diagnostics.final_output_path || "";
+      const gapReportPath = diagnostics.buying_guide_gap_report_path || "";
+      const client = diagnostics.client || "Unknown";
 
-        if (text.startsWith("Done. Prisma import saved to:")) {
-          return;
+      const inputRows = diagnostics.raw_rows ?? "—";
+      const consolidatedRows = diagnostics.consolidated_rows ?? "—";
+      const exportedRows = diagnostics.enriched_rows ?? "—";
+
+      const consolidatedGross = Number(diagnostics.consolidated_gross_total || 0);
+      const exportedGross = Number(diagnostics.exported_gross_total || 0);
+      const skippedGross = Number(diagnostics.skipped_buying_guide_gross_total || 0);
+
+      this.log(
+        `${filename}: Client ${client} · ${inputRows} input row(s) → ${consolidatedRows} consolidated → ${exportedRows} exported`,
+        "info"
+      );
+
+      this.log(
+        `${filename}: Gross ${this.formatMoney(consolidatedGross)} → exported ${this.formatMoney(exportedGross)} · skipped ${this.formatMoney(skippedGross)}`,
+        skippedGross > 0 ? "warn" : "info"
+      );
+
+      if (outputPath) {
+        this.log(`${filename}: Output ready: ${this.compactDisplayPath(outputPath)}`, "success");
+      }
+
+      if (gapReportPath) {
+        this.log(`${filename}: Gap report ready: ${this.compactDisplayPath(gapReportPath)}`, "warn");
+      }
+
+      if (skippedRows.length || previewErrors.length) {
+        const partners = this.uniquePartnersFromRows([...previewErrors, ...skippedRows]);
+
+        if (partners.length) {
+          this.log(
+            `${filename}: Action needed — add/approve Buying Guide rows for: ${partners.join(", ")}`,
+            "warn"
+          );
         }
-
-        this.log(`${filename}: ${text}`, "info");
-      });
-
-      (data.warnings || []).forEach((warning) => {
-        this.log(`${filename}: ${warning}`, "warn");
-      });
-
-      if (Array.isArray(diagnostics.partners) && diagnostics.partners.length) {
-        this.log(`${filename}: Partners detected: ${diagnostics.partners.join(", ")}`, "info");
       }
 
       if (diagnostics.gemini_used === true) {
-        this.log(`${filename}: Gemini used: yes`, "success");
+        const before = diagnostics.bad_partners_before_gemini;
+        const after = diagnostics.bad_partners_after_gemini;
 
-        if (diagnostics.bad_partners_before_gemini !== undefined) {
+        if (before !== undefined && after !== undefined) {
           this.log(
-            `${filename}: Bad partners before Gemini: ${diagnostics.bad_partners_before_gemini}`,
-            "info"
-          );
-        }
-
-        if (diagnostics.bad_partners_after_gemini !== undefined) {
-          this.log(
-            `${filename}: Bad partners after Gemini: ${diagnostics.bad_partners_after_gemini}`,
-            diagnostics.bad_partners_after_gemini > 0 ? "warn" : "success"
+            `${filename}: Gemini cleaned bad partners: ${before} → ${after}`,
+            Number(after) > 0 ? "warn" : "success"
           );
         }
       }
 
-      if (Array.isArray(diagnostics.preview_errors) && diagnostics.preview_errors.length) {
-        const limit = 5;
-
-        diagnostics.preview_errors.slice(0, limit).forEach((item) => {
-          this.log(
-            `${filename}: Buying Guide issue for partner '${item.partner || ""}' — ${item.status || ""}`,
-            "warn"
-          );
-        });
-
-        const remaining = diagnostics.preview_errors.length - limit;
-
-        if (remaining > 0) {
-          this.log(`${filename}: ${remaining} more Buying Guide issue(s) hidden.`, "warn");
-        }
-      }
-
-      if (
-        Array.isArray(diagnostics.skipped_buying_guide_rows) &&
-        diagnostics.skipped_buying_guide_rows.length
-      ) {
-        const limit = 5;
-
-        diagnostics.skipped_buying_guide_rows.slice(0, limit).forEach((item) => {
-          this.log(
-            `${filename}: Skipped ${item.client || ""}/${item.partner || ""} — ${item.reason || ""}`,
-            "warn"
-          );
-        });
-
-        const remaining = diagnostics.skipped_buying_guide_rows.length - limit;
-
-        if (remaining > 0) {
-          this.log(`${filename}: ${remaining} more skipped Buying Guide row(s) hidden.`, "warn");
-        }
+      if (!warnings.length) {
+        this.log(`${filename}: Completed successfully with no action needed.`, "success");
+      } else if (!skippedRows.length && !previewErrors.length) {
+        this.log(`${filename}: Completed with ${warnings.length} warning(s).`, "warn");
       }
     },
 
@@ -292,14 +306,9 @@
       };
 
       const [icon, border, bg, text] = styles[type] || styles.info;
-
       const toast = document.createElement("div");
-      toast.className = `
-        pointer-events-auto transform transition-all duration-300 translate-x-4 opacity-0
-        ${bg} ${border} ${text}
-        border rounded-2xl shadow-2xl px-4 py-3
-      `;
 
+      toast.className = `pointer-events-auto transform transition-all duration-300 translate-x-4 opacity-0 ${bg} ${border} ${text} border rounded-2xl shadow-2xl px-4 py-3`;
       toast.innerHTML = `
         <div class="flex items-start gap-3">
           <span class="text-lg">${icon}</span>
@@ -316,10 +325,7 @@
       toast.querySelector("button")?.addEventListener("click", close);
       this.els.toastContainer.appendChild(toast);
 
-      requestAnimationFrame(() => {
-        toast.classList.remove("translate-x-4", "opacity-0");
-      });
-
+      requestAnimationFrame(() => toast.classList.remove("translate-x-4", "opacity-0"));
       setTimeout(close, 4200);
     },
 
@@ -333,10 +339,9 @@
     },
 
     setDropZoneActive(active) {
-      this.els.dropZone?.classList.toggle("border-violet-400", active);
-      this.els.dropZone?.classList.toggle("bg-violet-500", active);
-      this.els.dropZone?.classList.toggle("bg-opacity-10", active);
-      this.els.dropZone?.classList.toggle("scale-[1.01]", active);
+      ["border-violet-400", "bg-violet-500", "bg-opacity-10", "scale-[1.01]"].forEach((className) => {
+        this.els.dropZone?.classList.toggle(className, active);
+      });
     },
 
     setUploadState(isUploading, text = "", count = "", progress = 0) {
@@ -374,13 +379,7 @@
           body: formData,
         });
 
-        this.setUploadState(
-          true,
-          "Upload complete. Refreshing plan list…",
-          `${data.count || validFiles.length} uploaded`,
-          80
-        );
-
+        this.setUploadState(true, "Upload complete. Refreshing plan list…", `${data.count || validFiles.length} uploaded`, 80);
         this.toast(data.message || "Media plan upload complete.", "success");
         this.log(data.message || "Upload complete.", "success");
 
@@ -444,9 +443,7 @@
         config.input.value = "";
         config.wrap?.classList.add("hidden");
 
-        if (config.nameEl) {
-          config.nameEl.textContent = "—";
-        }
+        if (config.nameEl) config.nameEl.textContent = "—";
 
         await this.refreshStatus();
       } catch (err) {
@@ -559,16 +556,12 @@
 
       this.els.emptyPlans?.classList.add("hidden");
       this.els.planList.appendChild(this.createPlansToolbar());
-
-      this.plans.forEach((plan) => {
-        this.els.planList.appendChild(this.createPlanItem(plan));
-      });
+      this.plans.forEach((plan) => this.els.planList.appendChild(this.createPlanItem(plan)));
     },
 
     createPlansToolbar() {
       const toolbar = document.createElement("div");
       toolbar.className = "flex items-center justify-between gap-3 mb-3";
-
       toolbar.innerHTML = `
         <div class="text-xs text-gray-500">Tick plans to include in batch conversion.</div>
         <div class="flex items-center gap-2">
@@ -601,9 +594,7 @@
             </p>
           </div>
         </label>
-        <button type="button" class="prisma-delete-plan text-xs font-semibold bg-red-500 bg-opacity-10 text-red-400 px-2 py-1 rounded-lg hover:bg-opacity-20 flex-shrink-0">
-          Delete
-        </button>
+        <button type="button" class="prisma-delete-plan text-xs font-semibold bg-red-500 bg-opacity-10 text-red-400 px-2 py-1 rounded-lg hover:bg-opacity-20 flex-shrink-0">Delete</button>
       `;
 
       item.querySelector(".prisma-plan-checkbox").addEventListener("change", (event) => {
@@ -639,9 +630,7 @@
     updateSelectedCount() {
       const count = this.selectedPlans.size;
 
-      if (this.els.selectedCount) {
-        this.els.selectedCount.textContent = `${count} selected`;
-      }
+      if (this.els.selectedCount) this.els.selectedCount.textContent = `${count} selected`;
 
       if (this.els.convertSelectedBtn) {
         const disabled = count === 0;
@@ -654,17 +643,12 @@
     buildConvertPayload(filename) {
       const clientMode = this.els.clientMode?.value || "AUTO";
 
-      const payload = {
+      return {
         filename,
         use_gemini: this.els.useGemini ? Boolean(this.els.useGemini.checked) : true,
         skip_unmatched_buying_guide: this.els.skipUnmatched ? Boolean(this.els.skipUnmatched.checked) : true,
+        ...(clientMode !== "AUTO" ? { client: clientMode } : {}),
       };
-
-      if (clientMode !== "AUTO") {
-        payload.client = clientMode;
-      }
-
-      return payload;
     },
 
     async convertSelectedPlans() {
@@ -695,12 +679,17 @@
           });
 
           results.push({ filename, ok: true, data });
-
-          this.log(`Converted ${filename}`, "success");
           this.logBackendDiagnostics(filename, data);
+
+          const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0;
+          this.log(
+            warningCount > 0
+              ? `Converted ${filename} with ${warningCount} warning(s)`
+              : `Converted ${filename}`,
+            warningCount > 0 ? "warn" : "success"
+          );
         } catch (err) {
           results.push({ filename, ok: false, error: err.message, data: err.data || {} });
-
           this.log(`Failed to convert ${filename}: ${err.message}`, "error");
           this.logBackendDiagnostics(filename, err.data || {});
         }
@@ -717,19 +706,17 @@
 
       this.updateBatchSummary(total, total, `${successCount} converted, ${failCount} failed`);
 
-      if (successCount && !failCount) {
-        this.toast(`Converted ${successCount} media plan(s).`, "success");
-      } else if (successCount && failCount) {
-        this.toast(`Converted ${successCount}; ${failCount} failed.`, "warn");
-      } else {
-        this.toast("No media plans converted successfully.", "error");
-      }
+      this.toast(
+        successCount && !failCount
+          ? `Converted ${successCount} media plan(s).`
+          : successCount
+            ? `Converted ${successCount}; ${failCount} failed.`
+            : "No media plans converted successfully.",
+        successCount && !failCount ? "success" : successCount ? "warn" : "error"
+      );
 
       const lastSuccess = [...results].reverse().find((item) => item.ok);
-
-      if (lastSuccess) {
-        this.renderMatchPreview(lastSuccess.data.preview || []);
-      }
+      if (lastSuccess) this.renderMatchPreview(lastSuccess.data.preview || []);
 
       this.setBatchConverting(false, total);
     },
@@ -748,10 +735,7 @@
     renderBatchStart(filenames) {
       this.els.batchResultPanel?.classList.remove("hidden");
 
-      if (this.els.batchSummary) {
-        this.els.batchSummary.textContent = `0 / ${filenames.length}`;
-      }
-
+      if (this.els.batchSummary) this.els.batchSummary.textContent = `0 / ${filenames.length}`;
       if (!this.els.batchResultList) return;
 
       this.els.batchResultList.innerHTML = filenames
@@ -760,9 +744,7 @@
     },
 
     updateBatchSummary(done, total, label) {
-      if (this.els.batchSummary) {
-        this.els.batchSummary.textContent = `${done} / ${total} · ${label}`;
-      }
+      if (this.els.batchSummary) this.els.batchSummary.textContent = `${done} / ${total} · ${label}`;
     },
 
     batchRowHtml(filename, subtitle, status, variant = "queued", data = {}) {
@@ -773,15 +755,31 @@
       }[variant] || "bg-gray-900 border-gray-800";
 
       if (variant === "success") {
+        const hasGapReport = Boolean(data.gapReportDownloadUrl);
+
         return `
           <div class="flex items-center justify-between gap-3 ${classes} border rounded-xl px-3 py-2">
             <div class="min-w-0">
               <p class="text-xs font-bold text-green-100 truncate">${htmlEscape(filename)}</p>
               <p class="text-xs text-green-300 truncate">${htmlEscape(data.outputFile || "Prisma import")}</p>
+              ${
+                data.gapReportFile
+                  ? `<p class="text-xs text-yellow-300 truncate">Gap report: ${htmlEscape(data.gapReportFile)}</p>`
+                  : ""
+              }
             </div>
-            <a href="${htmlEscape(data.downloadUrl || "#")}" class="text-xs font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg transition flex-shrink-0">
-              Download
-            </a>
+
+            <div class="flex items-center gap-2 flex-shrink-0">
+              ${
+                hasGapReport
+                  ? `<a href="${htmlEscape(data.gapReportDownloadUrl)}" class="text-xs font-bold bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-2 rounded-lg transition">Gap Report</a>`
+                  : ""
+              }
+
+              <a href="${htmlEscape(data.downloadUrl || "#")}" class="text-xs font-bold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg transition">
+                Prisma
+              </a>
+            </div>
           </div>
         `;
       }
@@ -812,24 +810,19 @@
         .map((filename) => {
           const result = resultMap.get(filename);
 
-          if (!result) {
-            return this.batchRowHtml(filename, "Queued", "Waiting");
-          }
-
-          if (!result.ok) {
-            return this.batchRowHtml(filename, result.error, "Failed", "failed");
-          }
+          if (!result) return this.batchRowHtml(filename, "Queued", "Waiting");
+          if (!result.ok) return this.batchRowHtml(filename, result.error, "Failed", "failed");
 
           return this.batchRowHtml(filename, "", "", "success", {
             outputFile: result.data.output_file || "Prisma import",
             downloadUrl: result.data.download_url || "#",
+            gapReportFile: result.data.gap_report_file || "",
+            gapReportDownloadUrl: result.data.gap_report_download_url || "",
           });
         })
         .join("");
 
-      if (this.els.batchSummary) {
-        this.els.batchSummary.textContent = `${results.length} / ${total}`;
-      }
+      if (this.els.batchSummary) this.els.batchSummary.textContent = `${results.length} / ${total}`;
     },
 
     renderMatchPreview(records) {
@@ -842,20 +835,20 @@
         return;
       }
 
-      records.forEach((record) => {
-        const tr = document.createElement("tr");
-        tr.className = "border-b border-gray-800";
-        tr.innerHTML = `
-          <td class="py-3 pr-4">${htmlEscape(record.partner)}</td>
-          <td class="py-3 pr-4">${htmlEscape(record.placement_name)}</td>
-          <td class="py-3 pr-4">${htmlEscape(record.status)}</td>
-          <td class="py-3 pr-4">${htmlEscape(record.supplier_name)}</td>
-          <td class="py-3 pr-4">${htmlEscape(record.supplier_code)}</td>
-          <td class="py-3 pr-4">${htmlEscape(record.placement_booking_type)}</td>
-        `;
-
-        this.els.matchTableBody.appendChild(tr);
-      });
+      this.els.matchTableBody.innerHTML = records
+        .map(
+          (record) => `
+            <tr class="border-b border-gray-800">
+              <td class="py-3 pr-4">${htmlEscape(record.partner)}</td>
+              <td class="py-3 pr-4">${htmlEscape(record.placement_name)}</td>
+              <td class="py-3 pr-4">${htmlEscape(record.status)}</td>
+              <td class="py-3 pr-4">${htmlEscape(record.supplier_name)}</td>
+              <td class="py-3 pr-4">${htmlEscape(record.supplier_code)}</td>
+              <td class="py-3 pr-4">${htmlEscape(record.placement_booking_type)}</td>
+            </tr>
+          `
+        )
+        .join("");
 
       this.els.matchTable.classList.remove("hidden");
     },
@@ -894,7 +887,8 @@
       const filenames = this.pendingDeleteFiles;
 
       if (!filenames.length) {
-        return this.closeDeleteModal();
+        this.closeDeleteModal();
+        return;
       }
 
       try {
@@ -928,6 +922,32 @@
       this.els.deleteConfirmBtn.textContent = isDeleting ? "Deleting..." : "Delete";
       this.els.deleteConfirmBtn.classList.toggle("opacity-60", isDeleting);
       this.els.deleteConfirmBtn.classList.toggle("cursor-not-allowed", isDeleting);
+    },
+
+    compactDisplayPath(path) {
+      const parts = String(path || "").replaceAll("\\", "/").split("/").filter(Boolean);
+      return parts.length >= 2 ? `${parts.at(-2)}/${parts.at(-1)}` : String(path || "");
+    },
+
+    uniquePartnersFromRows(rows = []) {
+      return [
+        ...new Set(
+          rows
+            .map((row) => String(row?.partner || row?.missing_partner || "").trim())
+            .filter(Boolean)
+        ),
+      ].sort();
+    },
+
+    formatMoney(value) {
+      const number = Number(value || 0);
+
+      return Number.isNaN(number)
+        ? "0.00"
+        : number.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
     },
 
     escapeHtml(value) {

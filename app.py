@@ -790,7 +790,6 @@ def prisma_convert():
     def add_log(message):
         text = str(message)
         logs.append(text)
-        print(f"[PRISMA] {text}")
 
     if not filename:
         return jsonify({
@@ -845,19 +844,16 @@ def prisma_convert():
             "skip_unmatched_buying_guide": skip_unmatched,
         })
 
-        add_log(f"Starting conversion for {safe_filename}")
-        add_log(f"Client: {client}")
-        add_log(f"Gemini fallback: {'enabled' if use_gemini else 'disabled'}")
-        add_log(f"Skip unmatched Buying Guide rows: {'enabled' if skip_unmatched else 'disabled'}")
-
         result = run_media_plan_to_prisma(
             media_plan_path=media_plan_path,
             buying_guide_path=BUYING_GUIDE_PATH,
             output_path=output_path,
             client=client,
-            debug=True,
+            debug=False,
             use_gemini=use_gemini,
             skip_unmatched_buying_guide=skip_unmatched,
+            generate_buying_guide_gap_report=True,
+            verbose=False,
         )
 
         logs.extend(result.get("logs", []))
@@ -878,7 +874,10 @@ def prisma_convert():
             else:
                 unmatched.append(record.get("partner"))
 
-        return jsonify({
+        gap_report_path = diagnostics.get("buying_guide_gap_report_path", "")
+        gap_report_file = os.path.basename(gap_report_path) if gap_report_path else ""
+
+        response = {
             "ok": True,
             "client": client,
             "detected_client": detected_client,
@@ -893,7 +892,13 @@ def prisma_convert():
             "logs": logs,
             "warnings": warnings,
             "diagnostics": diagnostics,
-        })
+        }
+
+        if gap_report_file:
+            response["gap_report_file"] = gap_report_file
+            response["gap_report_download_url"] = f"/api/prisma/download/{gap_report_file}"
+
+        return jsonify(response)
 
     except Exception as e:
         error_message = str(e)
@@ -933,10 +938,23 @@ def prisma_convert():
 @app.route("/api/prisma/download/<path:name>", methods=["GET"])
 def prisma_download(name):
     safe_name = secure_filename(name)
+
+    allowed_suffixes = (
+        "_prisma_import.xlsx",
+        "_buying_guide_gap_report.xlsx",
+    )
+
+    if not safe_name.endswith(allowed_suffixes):
+        return jsonify({
+            "error": "Unsupported Prisma download file."
+        }), 400
+
     full = os.path.join(PRISMA_OUTPUT_DIR, safe_name)
 
     if not os.path.exists(full):
-        return jsonify({"error": "File not found"}), 404
+        return jsonify({
+            "error": "File not found"
+        }), 404
 
     return send_file(
         full,
