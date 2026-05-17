@@ -1,27 +1,59 @@
 <div class="space-y-6">
 
-  <!-- Header -->
-  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">
+  <div class="card-prisma rounded-2xl p-6 flex flex-col gap-5">
 
-      <!-- Left: Workflow Copy -->
-      <div class="min-w-0 flex-1">
-        <p class="text-xs font-bold tracking-widest text-violet-400 uppercase mb-2">
-          Prisma Conversion Workflow
-        </p>
+    <div class="flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-12 h-12 rounded-2xl bg-white bg-opacity-10 flex items-center justify-center text-2xl">
+          📐
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-xl font-extrabold text-white">Prisma</h2>
+          <p class="text-xs text-violet-300">Media Plan · Buying Guide · Import</p>
+        </div>
+      </div>
 
-        <h2 class="text-2xl font-black text-white">
+      <span id="prismaReadyBadge"
+            class="text-xs font-semibold bg-gray-800 text-gray-400 px-3 py-1 rounded-full flex-shrink-0">
+        Checking…
+      </span>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2">
+      <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
+        <p class="text-xl font-black" id="prismaPlanCount">—</p>
+        <p class="text-xs text-gray-400 mt-0.5">Plans</p>
+      </div>
+
+      <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
+        <p class="text-xl font-black" id="prismaSelectedCount">0</p>
+        <p class="text-xs text-gray-400 mt-0.5">Selected</p>
+      </div>
+
+      <div class="bg-white bg-opacity-5 rounded-xl p-3 text-center">
+        <p class="text-xl font-black">✨</p>
+        <p class="text-xs text-gray-400 mt-0.5">Gemini Cleanup</p>
+      </div>
+    </div>
+
+    <div class="space-y-3">
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-widest">
+        Conversion Workflow
+      </p>
+
+      <div class="bg-black bg-opacity-20 rounded-xl p-4">
+        <h3 class="text-lg font-black text-white">
           Media Plan → Buying Guide Match → Prisma Import
-        </h2>
+        </h3>
 
-        <p class="text-sm text-gray-500 mt-3 max-w-4xl leading-6">
+        <p class="text-sm text-gray-500 mt-2 leading-6">
           Upload media plans, auto-detect the client, normalize and consolidate placements,
           match each partner against the Buying Guide, then export a Prisma-ready import file.
           When enabled, Gemini helps clean uncertain partner/channel values and can suggest
           draft Buying Guide gap rows for finance review.
         </p>
 
-        <div class="flex flex-wrap items-center gap-2 mt-5">
+        <div class="flex flex-wrap items-center gap-2 mt-4">
           <span class="text-xs font-semibold bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-full">
             1. Upload plans
           </span>
@@ -31,7 +63,7 @@
           </span>
 
           <span class="text-xs font-semibold bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-full">
-            3. Normalize + consolidate
+            3. Normalize
           </span>
 
           <span class="text-xs font-semibold bg-violet-500 bg-opacity-10 text-violet-300 border border-violet-700 border-opacity-40 px-3 py-1.5 rounded-full">
@@ -39,53 +71,35 @@
           </span>
 
           <span class="text-xs font-semibold bg-yellow-500 bg-opacity-10 text-yellow-300 border border-yellow-700 border-opacity-40 px-3 py-1.5 rounded-full">
-            5. Buying Guide gaps
+            5. Gap report
           </span>
 
           <span class="text-xs font-semibold bg-green-500 bg-opacity-10 text-green-300 border border-green-700 border-opacity-40 px-3 py-1.5 rounded-full">
-            6. Export Prisma file
+            6. Export
           </span>
         </div>
       </div>
 
-      <!-- Right: Status Card -->
-      <div class="w-full xl:w-64 flex-shrink-0">
-        <div class="bg-gray-950 border border-gray-800 rounded-2xl p-4">
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <span class="text-xs font-bold tracking-widest text-gray-500 uppercase">
-              Status
-            </span>
-
-            <span id="prismaReadyBadge"
-                  class="text-xs font-semibold bg-gray-800 text-gray-400 px-3 py-1 rounded-full">
-              Checking…
-            </span>
-          </div>
-
-          <p class="text-xs text-gray-500 leading-5">
-            Setup requires a valid Buying Guide and Prisma template before conversion.
-          </p>
-        </div>
+      <div class="bg-black bg-opacity-20 rounded-xl px-4 py-3">
+        <p class="text-xs text-gray-500 leading-5">
+          Setup requires a valid Buying Guide and Prisma template before conversion.
+        </p>
       </div>
-
     </div>
+
   </div>
 
-  <!-- Main Grid -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-    <!-- Reference Files -->
     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
       <div class="flex items-center justify-between gap-3 mb-5">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 min-w-0">
           <div class="w-10 h-10 rounded-xl bg-violet-500 bg-opacity-10 flex items-center justify-center text-xl">
             📚
           </div>
-          <div>
+          <div class="min-w-0">
             <h3 class="text-base font-bold text-white">Reference Files</h3>
-            <p class="text-xs text-gray-500">
-              Buying Guide and Prisma template used for conversion
-            </p>
+            <p class="text-xs text-gray-500">Buying Guide and Prisma template</p>
           </div>
         </div>
 
@@ -96,10 +110,8 @@
         </button>
       </div>
 
-      <!-- Reference Status Cards -->
-      <div id="prismaStatusCard" class="space-y-3 mb-5">
+      <div class="space-y-3 mb-5">
 
-        <!-- Buying Guide Status -->
         <div class="bg-gray-950 border border-gray-800 rounded-2xl p-4">
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-start gap-3 min-w-0">
@@ -125,7 +137,7 @@
             <label for="buyingGuideInput"
                    id="buyingGuidePickBtn"
                    class="cursor-pointer text-xs font-bold bg-violet-600 hover:bg-violet-500 text-white px-3 py-2 rounded-lg transition flex-shrink-0">
-              Choose File
+              Choose
             </label>
           </div>
 
@@ -139,7 +151,7 @@
               <button id="buyingGuideUploadBtn"
                       type="button"
                       class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition flex-shrink-0">
-                Replace Buying Guide
+                Replace
               </button>
             </div>
           </div>
@@ -150,11 +162,10 @@
                  class="hidden">
         </div>
 
-        <!-- Prisma Template Status -->
         <div class="bg-gray-950 border border-gray-800 rounded-2xl p-4">
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-start gap-3 min-w-0">
-              <div class="w-9 h-9 rounded-xl bg-blue-500 bg-opacity-10 flex items-center justify-center text-lg flex-shrink-0">
+              <div class="w-9 h-9 rounded-xl bg-violet-500 bg-opacity-10 flex items-center justify-center text-lg flex-shrink-0">
                 📐
               </div>
 
@@ -176,7 +187,7 @@
             <label for="prismaTemplateInput"
                    id="prismaTemplatePickBtn"
                    class="cursor-pointer text-xs font-bold bg-violet-600 hover:bg-violet-500 text-white px-3 py-2 rounded-lg transition flex-shrink-0">
-              Choose File
+              Choose
             </label>
           </div>
 
@@ -190,7 +201,7 @@
               <button id="prismaTemplateUploadBtn"
                       type="button"
                       class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition flex-shrink-0">
-                Replace Template
+                Replace
               </button>
             </div>
           </div>
@@ -201,7 +212,6 @@
                  class="hidden">
         </div>
 
-        <!-- Available Clients -->
         <div class="flex items-center justify-between gap-4 bg-gray-950 border border-gray-800 rounded-2xl px-4 py-3">
           <div>
             <p class="text-sm font-bold text-white">Available Clients</p>
@@ -214,28 +224,23 @@
         </div>
       </div>
 
-      <!-- Helper Note -->
       <div class="bg-violet-500 bg-opacity-10 border border-violet-700 border-opacity-40 rounded-xl px-4 py-3">
         <p class="text-xs text-violet-200 leading-5">
           <span class="font-bold">Tip:</span>
-          Uploading a new Buying Guide or Prisma Template will replace the existing stored reference file.
-          Existing uploaded media plans will remain unchanged.
+          Replacing reference files will not remove uploaded media plans.
         </p>
       </div>
     </div>
 
-    <!-- Media Plan Upload -->
     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
       <div class="flex items-center justify-between gap-3 mb-5">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-blue-500 bg-opacity-10 flex items-center justify-center text-xl">
-            📐
+          <div class="w-10 h-10 rounded-xl bg-violet-500 bg-opacity-10 flex items-center justify-center text-xl">
+            📤
           </div>
           <div>
             <h3 class="text-base font-bold text-white">Upload Media Plans</h3>
-            <p class="text-xs text-gray-500">
-              Drag and drop .xlsx or .xls files — upload starts automatically
-            </p>
+            <p class="text-xs text-gray-500">Drag and drop .xlsx or .xls files</p>
           </div>
         </div>
 
@@ -245,7 +250,6 @@
         </span>
       </div>
 
-      <!-- Drag & Drop Zone -->
       <div id="prismaDropZone"
            class="group relative border-2 border-dashed border-violet-700 border-opacity-40 rounded-2xl p-8 text-center mb-5 cursor-pointer hover:border-violet-500 hover:bg-violet-500 hover:bg-opacity-5 transition">
 
@@ -260,29 +264,17 @@
             📤
           </div>
 
-          <p class="text-sm font-bold text-white">
-            Drop media plan files here
-          </p>
-
-          <p class="text-xs text-gray-500 mt-1">
-            or click to browse · supports multiple Excel files
-          </p>
+          <p class="text-sm font-bold text-white">Drop media plan files here</p>
+          <p class="text-xs text-gray-500 mt-1">or click to browse · supports multiple Excel files</p>
 
           <div class="flex items-center justify-center gap-2 mt-4 flex-wrap">
-            <span class="text-xs bg-gray-800 text-gray-400 border border-gray-700 px-2 py-1 rounded-full">
-              .xlsx
-            </span>
-            <span class="text-xs bg-gray-800 text-gray-400 border border-gray-700 px-2 py-1 rounded-full">
-              .xls
-            </span>
-            <span class="text-xs bg-violet-900 bg-opacity-50 text-violet-300 border border-violet-700 border-opacity-40 px-2 py-1 rounded-full">
-              Auto upload
-            </span>
+            <span class="text-xs bg-gray-800 text-gray-400 border border-gray-700 px-2 py-1 rounded-full">.xlsx</span>
+            <span class="text-xs bg-gray-800 text-gray-400 border border-gray-700 px-2 py-1 rounded-full">.xls</span>
+            <span class="text-xs bg-violet-900 bg-opacity-50 text-violet-300 border border-violet-700 border-opacity-40 px-2 py-1 rounded-full">Auto upload</span>
           </div>
         </div>
       </div>
 
-      <!-- Upload Progress / Status -->
       <div id="prismaUploadStatus"
            class="hidden mb-5 bg-gray-950 border border-gray-800 rounded-xl px-4 py-3">
         <div class="flex items-center justify-between mb-2">
@@ -301,17 +293,14 @@
         </div>
       </div>
 
-      <!-- Uploaded Plans Empty State -->
       <div id="prismaEmptyPlans"
            class="border border-dashed border-gray-700 rounded-xl p-5 text-center text-sm text-gray-500">
         No media plans uploaded yet.
       </div>
 
-      <!-- Uploaded Plans List -->
       <div id="prismaPlanList" class="space-y-3"></div>
     </div>
 
-    <!-- Convert -->
     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
       <div class="flex items-center gap-3 mb-5">
         <div class="w-10 h-10 rounded-xl bg-green-500 bg-opacity-10 flex items-center justify-center text-xl">
@@ -319,7 +308,7 @@
         </div>
         <div>
           <h3 class="text-base font-bold text-white">Convert Selected Plans</h3>
-          <p class="text-xs text-gray-500">Convert one or many uploaded media plans</p>
+          <p class="text-xs text-gray-500">Convert one or many uploaded plans</p>
         </div>
       </div>
 
@@ -338,27 +327,19 @@
           </select>
 
           <p class="text-xs text-gray-500 mt-2">
-            Auto Detect uses each plan’s detected client when available. Force mode applies the same client to every selected plan.
+            Auto Detect uses each plan’s detected client when available.
           </p>
-        </div>
-
-        <div class="flex items-center justify-between bg-gray-950 border border-gray-800 rounded-xl px-4 py-3">
-          <span class="text-sm text-gray-300">Selected plans</span>
-          <span id="prismaSelectedCount"
-                class="text-xs font-bold bg-violet-500 bg-opacity-20 text-violet-300 px-2 py-1 rounded-full">
-            0 selected
-          </span>
         </div>
 
         <button id="prismaConvertSelectedBtn"
                 type="button"
-                class="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition">
+                class="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-bold transition">
           Convert Selected
         </button>
       </div>
 
       <div id="prismaBatchResultPanel"
-          class="hidden mt-5 bg-gray-950 border border-green-700 border-opacity-30 rounded-xl p-4">
+           class="hidden mt-5 bg-gray-950 border border-violet-700 border-opacity-30 rounded-xl p-4">
         <div class="flex items-center justify-between gap-3 mb-3">
           <h4 class="text-sm font-bold text-white">Conversion Results</h4>
 
@@ -372,7 +353,6 @@
       </div>
     </div>
 
-    <!-- Prisma Log -->
     <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
       <div class="flex items-center justify-between gap-3 mb-5">
         <div class="flex items-center gap-3 min-w-0">
@@ -400,17 +380,14 @@
 
   </div>
 
-  <!-- Match Preview -->
   <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
     <div class="flex items-center gap-3 mb-5">
-      <div class="w-10 h-10 rounded-xl bg-indigo-500 bg-opacity-10 flex items-center justify-center text-xl">
+      <div class="w-10 h-10 rounded-xl bg-violet-500 bg-opacity-10 flex items-center justify-center text-xl">
         🗂️
       </div>
       <div>
         <h3 class="text-base font-bold text-white">Buying Guide Match Preview</h3>
-        <p class="text-xs text-gray-500">
-          Shows how consolidated placements matched to supplier rules
-        </p>
+        <p class="text-xs text-gray-500">Shows how consolidated placements matched supplier rules</p>
       </div>
     </div>
 
@@ -434,12 +411,10 @@
 
 </div>
 
-<!-- Prisma Toast Container -->
 <div id="prismaToastContainer"
      class="fixed top-24 right-6 z-50 space-y-3 w-80 pointer-events-none">
 </div>
 
-<!-- Prisma Delete Confirm Modal -->
 <div id="prismaDeleteModal"
      class="hidden fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm px-4">
   <div class="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">

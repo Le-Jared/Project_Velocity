@@ -17,12 +17,10 @@
     selectedPlans: new Set(),
     status: null,
     pendingDeleteFiles: [],
-    geminiEnabled: true,
     els: {},
 
     init() {
       this.cacheElements();
-      this.initGeminiToggle();
 
       if (!this.els.planList) {
         console.warn("[PRISMA] Prisma tab elements not found.");
@@ -142,10 +140,6 @@
       this.els.deleteFileList = $("#prismaDeleteFileList");
       this.els.deleteCancelBtn = $("#prismaDeleteCancelBtn");
       this.els.deleteConfirmBtn = $("#prismaDeleteConfirmBtn");
-
-      this.els.geminiToggleBtn = $("#geminiToggleBtn");
-      this.els.geminiToggleText = $("#geminiToggleText");
-      this.els.geminiToggleDot = $("#geminiToggleDot");
     },
 
     bindEvents() {
@@ -154,7 +148,6 @@
       this.els.templateUploadBtn?.addEventListener("click", () => this.uploadReferenceFile("template"));
       this.els.convertSelectedBtn?.addEventListener("click", () => this.convertSelectedPlans());
       this.els.clearLogBtn?.addEventListener("click", () => this.clearLog());
-      this.els.geminiToggleBtn?.addEventListener("click", () => this.toggleGemini());
 
       this.bindReferencePicker(this.els.buyingGuideInput, this.els.buyingGuideSelectedWrap, this.els.buyingGuideSelectedName, "Buying Guide");
       this.bindReferencePicker(this.els.templateInput, this.els.templateSelectedWrap, this.els.templateSelectedName, "Prisma Template");
@@ -187,41 +180,6 @@
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") this.closeDeleteModal();
       });
-    },
-
-    initGeminiToggle() {
-      const stored = localStorage.getItem("prismaGeminiEnabled");
-      this.geminiEnabled = stored === null ? true : stored === "true";
-      this.renderGeminiToggle();
-    },
-
-    toggleGemini() {
-      this.geminiEnabled = !this.geminiEnabled;
-      localStorage.setItem("prismaGeminiEnabled", String(this.geminiEnabled));
-      this.renderGeminiToggle();
-
-      const message = this.geminiEnabled
-        ? "Gemini enabled for Prisma conversions."
-        : "Gemini disabled for Prisma conversions.";
-
-      this.toast(message, this.geminiEnabled ? "info" : "warn");
-      this.log(message, this.geminiEnabled ? "info" : "warn");
-    },
-
-    renderGeminiToggle() {
-      if (!this.els.geminiToggleBtn || !this.els.geminiToggleText || !this.els.geminiToggleDot) return;
-
-      if (this.geminiEnabled) {
-        this.els.geminiToggleText.textContent = "Gemini On";
-        this.els.geminiToggleDot.className = "pulse-dot bg-violet-400";
-        this.els.geminiToggleBtn.className =
-          "flex items-center gap-1.5 text-xs font-semibold text-violet-300 bg-violet-500 bg-opacity-10 border border-violet-500 border-opacity-30 px-2.5 py-1 rounded-full hover:bg-opacity-20 transition";
-      } else {
-        this.els.geminiToggleText.textContent = "Gemini Off";
-        this.els.geminiToggleDot.className = "pulse-dot bg-gray-500";
-        this.els.geminiToggleBtn.className =
-          "flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-gray-800 border border-gray-700 px-2.5 py-1 rounded-full hover:bg-gray-700 transition";
-      }
     },
 
     bindReferencePicker(input, wrap, nameEl, label) {
@@ -440,6 +398,7 @@
         await this.refreshPlans();
 
         (data.saved || []).forEach((filename) => this.selectedPlans.add(filename));
+
         this.renderPlans();
         this.updateSelectedCount();
 
@@ -613,17 +572,19 @@
 
     createPlansToolbar() {
       const toolbar = document.createElement("div");
+      const allSelected = this.plans.length > 0 && this.selectedPlans.size === this.plans.length;
+
       toolbar.className = "flex items-center justify-between gap-3 mb-3";
       toolbar.innerHTML = `
         <div class="text-xs text-gray-500">Tick plans to include in batch conversion.</div>
         <div class="flex items-center gap-2">
-          <button type="button" data-action="select-all" class="text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">Select All</button>
-          <button type="button" data-action="clear" class="text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">Clear</button>
+          <button type="button" data-action="select-all" class="text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition">
+            ${allSelected ? "Deselect All" : "Select All"}
+          </button>
         </div>
       `;
 
-      toolbar.querySelector('[data-action="select-all"]').addEventListener("click", () => this.selectAllPlans());
-      toolbar.querySelector('[data-action="clear"]').addEventListener("click", () => this.clearSelectedPlans());
+      toolbar.querySelector('[data-action="select-all"]').addEventListener("click", () => this.toggleSelectAllPlans());
 
       return toolbar;
     },
@@ -667,14 +628,15 @@
       this.updateSelectedCount();
     },
 
-    selectAllPlans() {
-      this.plans.forEach((plan) => this.selectedPlans.add(plan.filename));
-      this.renderPlans();
-      this.updateSelectedCount();
-    },
+    toggleSelectAllPlans() {
+      const allSelected = this.plans.length > 0 && this.selectedPlans.size === this.plans.length;
 
-    clearSelectedPlans() {
-      this.selectedPlans.clear();
+      if (allSelected) {
+        this.selectedPlans.clear();
+      } else {
+        this.plans.forEach((plan) => this.selectedPlans.add(plan.filename));
+      }
+
       this.renderPlans();
       this.updateSelectedCount();
     },
@@ -682,7 +644,9 @@
     updateSelectedCount() {
       const count = this.selectedPlans.size;
 
-      if (this.els.selectedCount) this.els.selectedCount.textContent = `${count} selected`;
+      if (this.els.selectedCount) {
+        this.els.selectedCount.textContent = count;
+      }
 
       if (this.els.convertSelectedBtn) {
         const disabled = count === 0;
@@ -692,12 +656,20 @@
       }
     },
 
+    getGeminiEnabled() {
+      if (typeof window.getGlobalGeminiEnabled === "function") {
+        return Boolean(window.getGlobalGeminiEnabled());
+      }
+
+      return true;
+    },
+
     buildConvertPayload(filename) {
       const clientMode = this.els.clientMode?.value || "AUTO";
 
       return {
         filename,
-        use_gemini: Boolean(this.geminiEnabled),
+        use_gemini: this.getGeminiEnabled(),
         skip_unmatched_buying_guide: this.els.skipUnmatched ? Boolean(this.els.skipUnmatched.checked) : true,
         ...(clientMode !== "AUTO" ? { client: clientMode } : {}),
       };
