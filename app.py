@@ -24,6 +24,7 @@ from werkzeug.utils import secure_filename
 
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -36,6 +37,7 @@ TRACKER_INPUT = os.path.join(INPUT_FOLDER, "ACCT-108 Master Invoice Tracker 2026
 TRACKER_OUTPUT = os.path.join(OUTPUT_FOLDER, "ACCT-108 Master Invoice Tracker 2026 - Updated.xlsx")
 REPORT_PATH = os.path.join(OUTPUT_FOLDER, "invoice_sort_report.csv")
 CREDENTIALS = os.path.join(BASE_DIR, "credentials.json")
+TOKEN_FILE = os.path.join(BASE_DIR, "token.json")
 DRIVE_CONFIG = os.path.join(BASE_DIR, "drive_config.json")
 GEMINI_STATE_PATH = os.path.join(OUTPUT_FOLDER, "gemini_state.json")
 
@@ -48,6 +50,7 @@ PRISMA_TEMPLATE = os.path.join(
 )
 
 ALLOWED_EXTENSIONS = {"pdf"}
+SCRIPT_LOCK = threading.Lock()
 
 os.makedirs(INVOICE_FOLDER, exist_ok=True)
 os.makedirs(INPUT_FOLDER, exist_ok=True)
@@ -63,6 +66,17 @@ def allowed_file(filename):
 
 def allowed_plan_file(filename):
     return filename.lower().endswith((".xlsx", ".xls"))
+
+
+def folder_has_files(folder):
+    if not os.path.exists(folder):
+        return False
+
+    for _, _, files in os.walk(folder):
+        if files:
+            return True
+
+    return False
 
 
 def gemini_configured():
@@ -123,6 +137,61 @@ def gemini_status_payload():
     }
 
 
+def get_drive_auth_type():
+    if not os.path.exists(CREDENTIALS):
+        return None
+
+    try:
+        with open(CREDENTIALS, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if data.get("type") == "service_account":
+            return "service_account"
+
+        if "installed" in data or "web" in data:
+            return "oauth"
+
+        return "unknown"
+
+    except json.JSONDecodeError:
+        return "invalid"
+    except Exception:
+        return "invalid"
+
+
+def validate_credentials_file(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if data.get("type") == "service_account":
+            required = ["client_email", "private_key", "token_uri"]
+            missing = [key for key in required if not data.get(key)]
+
+            if missing:
+                return False, f"Invalid service account key. Missing: {', '.join(missing)}"
+
+            return True, "service_account"
+
+        if "installed" in data or "web" in data:
+            section = data.get("installed") or data.get("web") or {}
+            required = ["client_id", "client_secret", "auth_uri", "token_uri"]
+            missing = [key for key in required if not section.get(key)]
+
+            if missing:
+                return False, f"Invalid OAuth client secret. Missing: {', '.join(missing)}"
+
+            return True, "oauth"
+
+        return False, "Unsupported credentials.json format"
+
+    except json.JSONDecodeError:
+        return False, "credentials.json is not valid JSON"
+
+    except Exception as e:
+        return False, str(e)
+
+
 def get_invoice_supplier_counts_from_report():
     counts = {
         "Meta": 0,
@@ -179,6 +248,11 @@ def get_uploaded_pdf_count():
 
 
 def stream_script(script_name, q):
+    if not SCRIPT_LOCK.acquire(blocking=False):
+        q.put("[ERR] Another task is already running. Please wait for it to finish.")
+        q.put("__EXIT__1")
+        return
+
     try:
         script_path = os.path.join(BASE_DIR, script_name)
         env = os.environ.copy()
@@ -205,6 +279,9 @@ def stream_script(script_name, q):
     except Exception as e:
         q.put(f"[ERR] Failed to start {script_name}: {e}")
         q.put("__EXIT__1")
+
+    finally:
+        SCRIPT_LOCK.release()
 
 
 def run_and_stream(script_name):
@@ -286,6 +363,8 @@ def status():
     tracker_exists = os.path.exists(TRACKER_INPUT) or os.path.exists(TRACKER_OUTPUT)
     report_exists = os.path.exists(REPORT_PATH)
     creds_exists = os.path.exists(CREDENTIALS)
+    drive_auth_type = get_drive_auth_type()
+    token_exists = os.path.exists(TOKEN_FILE)
 
     folder_id_set = False
 
@@ -310,6 +389,8 @@ def status():
         "tracker_exists": tracker_exists,
         "report_exists": report_exists,
         "creds_exists": creds_exists,
+        "drive_auth_type": drive_auth_type,
+        "token_exists": token_exists,
         "folder_id_set": folder_id_set,
         "gemini": gemini_state["active"],
         "gemini_configured": gemini_state["configured"],
@@ -417,7 +498,7 @@ def upload():
             f.save(os.path.join(INVOICE_FOLDER, filename))
             saved.append(filename)
         else:
-            errors.append(f.filename)
+            errors.append(f.filename if f else "")
 
     return jsonify({
         "message": f"Uploaded {len(saved)} file(s)" + (f", {len(errors)} skipped" if errors else ""),
@@ -436,7 +517,7 @@ def upload_tracker():
 
     f = request.files["file"]
 
-    if not f.filename.endswith(".xlsx"):
+    if not f or not f.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Only .xlsx files accepted"}), 400
 
     if os.path.exists(TRACKER_INPUT):
@@ -447,6 +528,9 @@ def upload_tracker():
         shutil.copy2(TRACKER_INPUT, backup_name)
 
     f.save(TRACKER_INPUT)
+
+    if os.path.exists(TRACKER_OUTPUT):
+        os.remove(TRACKER_OUTPUT)
 
     return jsonify({
         "message": "[OK] Tracker uploaded to Input/ folder (previous version backed up)"
@@ -463,7 +547,7 @@ def upload_buying_guide():
 
     f = request.files["file"]
 
-    if not f.filename.lower().endswith(".xlsx"):
+    if not f or not f.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Only .xlsx files accepted"}), 400
 
     if os.path.exists(BUYING_GUIDE_PATH):
@@ -505,7 +589,7 @@ def upload_prisma_template():
 
     f = request.files["file"]
 
-    if not f.filename.lower().endswith(".xlsx"):
+    if not f or not f.filename.lower().endswith(".xlsx"):
         return jsonify({"error": "Only .xlsx files accepted"}), 400
 
     if os.path.exists(PRISMA_TEMPLATE):
@@ -553,23 +637,77 @@ def upload_credentials():
 
     f = request.files["file"]
 
-    if not f.filename.endswith(".json"):
+    if not f or not f.filename.lower().endswith(".json"):
         return jsonify({"error": "Only .json files accepted"}), 400
 
-    f.save(CREDENTIALS)
+    temp_path = CREDENTIALS + ".tmp"
+    f.save(temp_path)
+
+    valid, auth_type = validate_credentials_file(temp_path)
+
+    if not valid:
+        try:
+            os.remove(temp_path)
+        except Exception:
+            pass
+
+        return jsonify({
+            "error": auth_type,
+            "message": f"[ERR] {auth_type}",
+        }), 400
+
+    if os.path.exists(CREDENTIALS):
+        try:
+            os.remove(CREDENTIALS)
+        except Exception:
+            pass
+
+    os.replace(temp_path, CREDENTIALS)
+
+    if auth_type == "service_account" and os.path.exists(TOKEN_FILE):
+        try:
+            os.remove(TOKEN_FILE)
+        except Exception:
+            pass
+
+    label = "Service Account" if auth_type == "service_account" else "OAuth 2.0"
 
     return jsonify({
-        "message": "[OK] credentials.json saved to project root"
+        "message": f"[OK] credentials.json saved · detected {label}",
+        "auth_type": auth_type,
     })
 
 
 @app.route("/api/credentials/delete", methods=["POST"])
 def delete_credentials():
-    if os.path.exists(CREDENTIALS):
-        os.remove(CREDENTIALS)
-        return jsonify({"message": "[OK] credentials.json removed"})
+    deleted = []
+    errors = []
 
-    return jsonify({"message": "[WARN] No credentials file found"}), 404
+    for path, label in [
+        (CREDENTIALS, "credentials.json"),
+        (TOKEN_FILE, "token.json"),
+    ]:
+        if not os.path.exists(path):
+            continue
+
+        try:
+            os.remove(path)
+            deleted.append(label)
+        except Exception as e:
+            errors.append(f"{label}: {e}")
+
+    if deleted:
+        return jsonify({
+            "message": f"[OK] Removed {', '.join(deleted)}",
+            "deleted": deleted,
+            "errors": errors,
+        })
+
+    return jsonify({
+        "message": "[WARN] No credentials or OAuth token found",
+        "deleted": [],
+        "errors": errors,
+    }), 404
 
 
 @app.route("/api/drive/config", methods=["GET"])
@@ -626,9 +764,7 @@ def download_clients_zip():
             "error": "Clients/ folder not found. Run the workflow first."
         }), 404
 
-    has_files = any(files for _, _, files in os.walk(CLIENTS_FOLDER))
-
-    if not has_files:
+    if not folder_has_files(CLIENTS_FOLDER):
         return jsonify({
             "error": "Clients/ folder is empty. Run the workflow first."
         }), 404
@@ -700,7 +836,7 @@ def clear_workspace():
             continue
 
         for item in os.listdir(folder):
-            if item == ".gitkeep":
+            if item in {".gitkeep", "gemini_state.json"}:
                 continue
 
             if extension_filter and not item.lower().endswith(extension_filter):
@@ -829,7 +965,7 @@ def prisma_upload():
 
     for f in files:
         if not f or not allowed_plan_file(f.filename or ""):
-            errors.append(f.filename)
+            errors.append(f.filename if f else "")
             continue
 
         filename = secure_filename(f.filename)
@@ -971,9 +1107,9 @@ def prisma_convert():
         unmatched = []
 
         for record in preview_records:
-            status = str(record.get("status", ""))
+            status_text = str(record.get("status", ""))
 
-            if status.lower().startswith("matched"):
+            if status_text.lower().startswith("matched"):
                 matched_count += 1
             else:
                 unmatched.append(record.get("partner"))
@@ -1163,13 +1299,43 @@ def drive_sync():
         return jsonify({
             "status": "not_configured",
             "message": "[WARN] credentials.json not found. Upload it via the dashboard first.",
-        }), 501
+        }), 400
+
+    auth_type = get_drive_auth_type()
+
+    if auth_type in {None, "invalid", "unknown"}:
+        return jsonify({
+            "status": "invalid_credentials",
+            "message": "[ERR] credentials.json is invalid or unsupported. Upload OAuth client secret or Service Account key.",
+            "auth_type": auth_type,
+        }), 400
 
     if not os.path.exists(DRIVE_CONFIG):
         return jsonify({
             "status": "not_configured",
             "message": "[WARN] Drive folder ID not set. Add it in the Google Drive Sync card.",
-        }), 501
+        }), 400
+
+    try:
+        with open(DRIVE_CONFIG, encoding="utf-8") as f:
+            cfg = json.load(f)
+
+        if not str(cfg.get("root_folder_id", "")).strip():
+            return jsonify({
+                "status": "not_configured",
+                "message": "[WARN] Drive folder ID is empty. Add it in the Google Drive Sync card.",
+            }), 400
+    except Exception:
+        return jsonify({
+            "status": "not_configured",
+            "message": "[ERR] drive_config.json is invalid. Re-save the Drive Folder ID.",
+        }), 400
+
+    if not folder_has_files(CLIENTS_FOLDER):
+        return jsonify({
+            "status": "no_files",
+            "message": "[WARN] Clients/ folder is empty. Run the sorter or workflow first.",
+        }), 400
 
     return run_and_stream("drive_sync.py")
 

@@ -2,8 +2,6 @@
   <div class="flex items-start gap-4">
     <div class="w-10 h-10 rounded-xl bg-yellow-500 bg-opacity-10 flex items-center justify-center text-xl flex-shrink-0">☁️</div>
     <div class="flex-1">
-
-      <!-- Title row -->
       <div class="flex items-center gap-2 mb-1 flex-wrap">
         <h3 class="font-bold text-white">Google Drive Sync</h3>
         <span id="drive-card-badge" class="text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full">Not Connected</span>
@@ -13,7 +11,6 @@
         </button>
       </div>
 
-      <!-- Two-option strip -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         <div class="bg-blue-900 bg-opacity-20 border border-blue-700 border-opacity-40 rounded-xl px-4 py-3 cursor-pointer hover:bg-opacity-30 transition" onclick="openDriveSetupModal('oauth')">
           <div class="flex items-center gap-2 mb-1">
@@ -21,34 +18,35 @@
             <p class="text-xs font-bold text-blue-300">Personal Gmail</p>
             <span class="text-xs bg-blue-500 bg-opacity-20 text-blue-400 px-1.5 py-0.5 rounded-full font-semibold">OAuth</span>
           </div>
-          <p class="text-xs text-gray-400 leading-relaxed">Free Google Cloud project + OAuth 2.0. Works with any Gmail. Browser sign-in on first run only.</p>
+          <p class="text-xs text-gray-400 leading-relaxed">Best for local use. Browser sign-in on first run, then token is reused automatically.</p>
           <p class="text-xs text-blue-400 mt-1.5 font-semibold">View setup steps →</p>
         </div>
+
         <div class="bg-purple-900 bg-opacity-20 border border-purple-700 border-opacity-40 rounded-xl px-4 py-3 cursor-pointer hover:bg-opacity-30 transition" onclick="openDriveSetupModal('sa')">
           <div class="flex items-center gap-2 mb-1">
-            <span class="text-purple-400 text-sm">🏢</span>
-            <p class="text-xs font-bold text-purple-300">Google Workspace</p>
-            <span class="text-xs bg-purple-500 bg-opacity-20 text-purple-400 px-1.5 py-0.5 rounded-full font-semibold">Service Account</span>
+            <span class="text-purple-400 text-sm">🔐</span>
+            <p class="text-xs font-bold text-purple-300">Service Account</p>
+            <span class="text-xs bg-purple-500 bg-opacity-20 text-purple-400 px-1.5 py-0.5 rounded-full font-semibold">Server</span>
           </div>
-          <p class="text-xs text-gray-400 leading-relaxed">Requires Workspace org or Cloud access. Silent auth — no browser needed. Best for automation.</p>
+          <p class="text-xs text-gray-400 leading-relaxed">Best for automation. No browser needed. Share the Drive folder with the service account email.</p>
           <p class="text-xs text-purple-400 mt-1.5 font-semibold">View setup steps →</p>
         </div>
       </div>
 
-      <p class="text-xs text-gray-400 mb-5">Mirrors your <code class="text-gray-300">Clients/</code> folder to Google Drive. Skips files already uploaded.</p>
+      <p class="text-xs text-gray-400 mb-5">
+        Mirrors your <code class="text-gray-300">Clients/</code> folder to Google Drive. Existing files are skipped.
+      </p>
 
-      <!-- ── NOT CONNECTED STATE ── -->
       <div id="drive-not-connected">
-
-        <!-- Step 1: Upload credentials -->
         <div class="mb-5">
           <div class="flex items-center gap-2 mb-3">
             <div class="w-5 h-5 rounded-full bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-yellow-400">1</div>
             <p class="text-xs font-bold text-gray-300">
               Upload credentials.json
-              <span class="text-gray-500 font-normal">(Service Account key or OAuth client secret)</span>
+              <span class="text-gray-500 font-normal">(OAuth client secret or Service Account key)</span>
             </p>
           </div>
+
           <div id="creds-drop-zone"
             class="rounded-xl p-5 text-center cursor-pointer border border-dashed border-gray-700 hover:border-yellow-600 transition"
             ondragover="onCredsDragOver(event)"
@@ -57,8 +55,12 @@
             onclick="document.getElementById('creds-input').click()">
             <input type="file" id="creds-input" accept=".json" class="hidden" onchange="uploadCredentials(this.files[0])" />
             <div class="text-xl mb-1">🔑</div>
-            <p class="text-sm font-semibold text-gray-300">Drop <code class="text-yellow-400">credentials.json</code> here</p>
-            <p class="text-xs text-gray-600 mt-0.5">OAuth client secret <span class="text-gray-700">or</span> Service Account key — auto-detected</p>
+            <p class="text-sm font-semibold text-gray-300">
+              Drop <code class="text-yellow-400">credentials.json</code> here
+            </p>
+            <p class="text-xs text-gray-600 mt-0.5">
+              OAuth client secret or Service Account key — auto-detected
+            </p>
             <button onclick="event.stopPropagation(); openDriveSetupModal()"
               class="mt-2 text-xs text-sky-400 hover:text-sky-300 underline underline-offset-2 transition">
               Not sure which to use? View setup guide
@@ -67,52 +69,51 @@
           </div>
         </div>
 
-        <!-- Step 2: Folder ID -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <div class="w-5 h-5 rounded-full bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-yellow-400">2</div>
             <p class="text-xs font-bold text-gray-300">Set Target Drive Folder ID</p>
           </div>
+
           <div class="bg-gray-800 rounded-xl p-4 space-y-3">
             <div class="text-xs text-gray-400 space-y-1">
               <p>① Go to <span class="text-white font-semibold">drive.google.com</span> → open your target folder</p>
               <p>② Copy the ID from the URL: <code class="text-yellow-300 bg-gray-700 px-1 py-0.5 rounded">drive.google.com/drive/folders/<span class="text-white font-bold">THIS_PART</span></code></p>
             </div>
+
             <div class="flex gap-2">
               <input id="folder-id-input" type="text"
                 placeholder="e.g. 1ouHp4nx03SGy_zTadWAWHB9R61Kz5v0A"
                 class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 font-mono" />
               <button onclick="saveFolderID()"
-                class="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-xs transition">Save</button>
+                class="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-xs transition">
+                Save
+              </button>
             </div>
+
             <div id="folder-id-status" class="text-xs text-yellow-400 hidden"></div>
           </div>
         </div>
-
       </div>
-      <!-- ── END NOT CONNECTED STATE ── -->
 
-      <!-- ── CONNECTED STATE ── -->
       <div id="drive-connected" class="hidden space-y-4">
-
-        <!-- Status bar -->
         <div class="flex items-center gap-2 bg-green-500 bg-opacity-10 border border-green-500 border-opacity-20 rounded-xl px-4 py-3">
           <div class="w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></div>
           <p class="text-xs font-semibold text-green-300">Credentials loaded · Drive ready to sync</p>
           <span id="creds-filename" class="text-xs text-gray-500 ml-auto font-mono"></span>
         </div>
 
-        <!-- Folder ID display -->
         <div id="folder-id-display" class="bg-gray-800 rounded-xl p-4 space-y-2">
           <div class="flex items-center justify-between">
             <p class="text-xs font-bold text-gray-400">Target Folder ID</p>
             <button id="btn-edit-folder" onclick="toggleEditFolderID()"
-              class="text-xs text-sky-400 hover:text-sky-300 font-semibold transition">Edit</button>
+              class="text-xs text-sky-400 hover:text-sky-300 font-semibold transition">
+              Edit
+            </button>
           </div>
           <code id="folder-id-display-val" class="text-xs text-yellow-300 font-mono break-all">—</code>
         </div>
 
-        <!-- Folder ID edit (hidden by default) -->
         <div id="folder-id-edit" class="hidden bg-gray-800 rounded-xl p-4 space-y-3">
           <p class="text-xs font-bold text-gray-400">Update Folder ID</p>
           <div class="flex gap-2">
@@ -120,12 +121,13 @@
               placeholder="Paste new folder ID"
               class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 font-mono" />
             <button onclick="saveFolderIDConnected()"
-              class="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-xs transition">Save</button>
+              class="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-xs transition">
+              Save
+            </button>
           </div>
           <div id="folder-id-status-connected" class="text-xs text-yellow-400 hidden"></div>
         </div>
 
-        <!-- Action buttons -->
         <div class="flex gap-2 flex-wrap">
           <button id="btn-drive" onclick="runDriveSync()"
             class="btn-action flex-1 py-2.5 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-xs">
@@ -141,13 +143,171 @@
           </button>
         </div>
 
-        <!-- Hidden replace input -->
+        <div id="creds-replace-status" class="text-xs text-yellow-400 hidden"></div>
+
         <input type="file" id="creds-replace-input" accept=".json" class="hidden"
           onchange="uploadCredentials(this.files[0])" />
-
       </div>
-      <!-- ── END CONNECTED STATE ── -->
+    </div>
+  </div>
+</div>
 
+<div id="drive-setup-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
+  <div class="absolute inset-0 bg-black bg-opacity-75 backdrop-blur-sm" onclick="closeDriveSetupModal()"></div>
+  <div class="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-yellow-500 bg-opacity-10 flex items-center justify-center text-lg">☁️</div>
+        <div>
+          <p class="font-extrabold text-white text-sm">Google Drive Sync — Setup Guide</p>
+          <p class="text-xs text-gray-500 mt-0.5">Choose OAuth for local use or Service Account for automation</p>
+        </div>
+      </div>
+      <button onclick="closeDriveSetupModal()" class="text-gray-600 hover:text-white text-xl leading-none transition">✕</button>
+    </div>
+
+    <div class="flex border-b border-gray-800">
+      <button id="modal-tab-oauth-btn" onclick="switchDriveTab('oauth')"
+        class="flex-1 py-3 text-xs font-bold transition border-b-2 border-blue-500 text-blue-400 bg-blue-500 bg-opacity-5">
+        👤 Personal Gmail / OAuth
+      </button>
+      <button id="modal-tab-sa-btn" onclick="switchDriveTab('sa')"
+        class="flex-1 py-3 text-xs font-bold transition border-b-2 border-transparent text-gray-500 hover:text-gray-300">
+        🔐 Service Account
+      </button>
+    </div>
+
+    <div id="modal-tab-oauth" class="p-6 space-y-4 max-h-96 overflow-y-auto">
+      <div class="flex items-start gap-3 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-30 rounded-xl px-4 py-3">
+        <span class="text-blue-400 text-base flex-shrink-0 mt-0.5">👤</span>
+        <div>
+          <p class="text-xs font-bold text-blue-300 mb-0.5">Works with personal Gmail and Workspace user accounts</p>
+          <p class="text-xs text-gray-400">Uses OAuth 2.0. Best for local use because first sync opens a browser sign-in, then saves token.json automatically.</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Setup Steps</p>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">1</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Create a Google Cloud project</p>
+            <p class="text-xs text-gray-400 mt-0.5">Go to <code class="text-blue-300 bg-gray-800 px-1 rounded">console.cloud.google.com</code> → New Project</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">2</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Enable Google Drive API</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Library → Google Drive API → Enable</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">3</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Configure OAuth consent screen</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → OAuth consent screen → External or Internal → add your account as a test user if required</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">4</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Create OAuth Desktop credentials</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Credentials → Create Credentials → OAuth client ID → Desktop App → Download JSON</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">5</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Upload the JSON file</p>
+            <p class="text-xs text-gray-400 mt-0.5">Rename it to <code class="text-blue-300 bg-gray-800 px-1 rounded">credentials.json</code> and upload it in the Drive Sync card</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">6</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Set Folder ID and run sync</p>
+            <p class="text-xs text-gray-400 mt-0.5">On first sync, sign in and approve access. Future syncs reuse <code class="text-blue-300 bg-gray-800 px-1 rounded">token.json</code>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-tab-sa" class="p-6 space-y-4 max-h-96 overflow-y-auto hidden">
+      <div class="flex items-start gap-3 bg-purple-500 bg-opacity-10 border border-purple-500 border-opacity-30 rounded-xl px-4 py-3">
+        <span class="text-purple-400 text-base flex-shrink-0 mt-0.5">🔐</span>
+        <div>
+          <p class="text-xs font-bold text-purple-300 mb-0.5">Best for automated or server deployments</p>
+          <p class="text-xs text-gray-400">Uses a Service Account key. No browser sign-in needed. The target folder must be shared with the service account email.</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Setup Steps</p>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">1</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Create or open a Google Cloud project</p>
+            <p class="text-xs text-gray-400 mt-0.5">Go to <code class="text-purple-300 bg-gray-800 px-1 rounded">console.cloud.google.com</code> → select or create a project</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">2</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Enable Google Drive API</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Library → Google Drive API → Enable</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">3</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Create a Service Account</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Credentials → Create Credentials → Service Account</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">4</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Download JSON key</p>
+            <p class="text-xs text-gray-400 mt-0.5">Open the service account → Keys → Add Key → Create new key → JSON</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">5</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Share the target Drive folder</p>
+            <p class="text-xs text-gray-400 mt-0.5">Open the service account JSON → copy <code class="text-purple-300 bg-gray-800 px-1 rounded">client_email</code> → share your target Drive folder with it as <span class="text-white font-semibold">Editor</span></p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-3">
+          <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">6</div>
+          <div>
+            <p class="text-xs font-semibold text-white">Upload the JSON key</p>
+            <p class="text-xs text-gray-400 mt-0.5">Rename it to <code class="text-purple-300 bg-gray-800 px-1 rounded">credentials.json</code> and upload it in the Drive Sync card.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 py-4 border-t border-gray-800 flex items-center justify-between gap-4">
+      <p class="text-xs text-gray-600">
+        Both methods use <code class="text-gray-500">credentials.json</code>. The app auto-detects OAuth vs Service Account.
+      </p>
+      <button onclick="closeDriveSetupModal()" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold text-xs transition">
+        Close
+      </button>
     </div>
   </div>
 </div>

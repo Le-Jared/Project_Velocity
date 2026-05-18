@@ -2,17 +2,47 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function escapeJsString(value) {
+  return String(value ?? "")
+    .replaceAll("\\", "\\\\")
+    .replaceAll("'", "\\'")
+    .replaceAll("\n", "\\n")
+    .replaceAll("\r", "\\r");
+}
+
+async function getJson(url, options = {}) {
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => ({}));
+  return { res, data };
+}
+
+function setClass(el, className) {
+  if (el) el.className = className;
+}
+
+function setText(el, text) {
+  if (el) el.textContent = text;
+}
+
 function switchTab(tab) {
   const isPrisma = tab === "prisma";
+  const prismaBtn = qs("tab-prisma-btn");
+  const invoicesBtn = qs("tab-invoices-btn");
 
   qs("tab-prisma")?.classList.toggle("active", isPrisma);
   qs("tab-invoices")?.classList.toggle("active", !isPrisma);
 
-  const prismaBtn = qs("tab-prisma-btn");
-  const invoicesBtn = qs("tab-invoices-btn");
-
-  if (prismaBtn) prismaBtn.className = "tab-btn " + (isPrisma ? "active-prisma" : "inactive");
-  if (invoicesBtn) invoicesBtn.className = "tab-btn " + (!isPrisma ? "active-invoices" : "inactive");
+  setClass(prismaBtn, "tab-btn " + (isPrisma ? "active-prisma" : "inactive"));
+  setClass(invoicesBtn, "tab-btn " + (!isPrisma ? "active-invoices" : "inactive"));
 }
 
 function showStatus(el, msg, colorClass, delay = 4000) {
@@ -33,7 +63,9 @@ function triggerBlobDownload(blob, filename) {
 
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
 
   URL.revokeObjectURL(url);
 }
@@ -45,10 +77,17 @@ const CURRENCY_STYLE = {
   USD: { label: "USD", color: "text-purple-400", bg: "bg-purple-500" },
 };
 
+const BTN_IDS = {
+  workflow: "btn-workflow",
+  extract: "btn-extract",
+  sort: "btn-sort",
+};
+
 let _lastSupplierCounts = {};
 let _selectedInvoices = new Set();
 let _geminiEnabled = true;
 let _geminiConfigured = false;
+let _statusTimer = null;
 
 window.getGlobalGeminiEnabled = function () {
   return Boolean(_geminiEnabled && _geminiConfigured);
@@ -112,8 +151,7 @@ function renderGlobalGeminiToggle() {
 
 async function loadGeminiStatus() {
   try {
-    const res = await fetch("/api/gemini/status");
-    const data = await res.json();
+    const { data } = await getJson("/api/gemini/status");
 
     _geminiEnabled = Boolean(data.enabled);
     _geminiConfigured = Boolean(data.configured);
@@ -133,13 +171,11 @@ async function toggleGlobalGemini() {
   const nextEnabled = !_geminiEnabled;
 
   try {
-    const res = await fetch("/api/gemini/toggle", {
+    const { data } = await getJson("/api/gemini/toggle", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled: nextEnabled }),
     });
-
-    const data = await res.json();
 
     _geminiEnabled = Boolean(data.enabled);
     _geminiConfigured = Boolean(data.configured);
@@ -158,9 +194,7 @@ async function toggleGlobalGemini() {
 
 async function refreshSummary() {
   try {
-    const res = await fetch("/api/summary");
-    const data = await res.json();
-
+    const { data } = await getJson("/api/summary");
     const emptyEl = qs("summary-empty");
     const dataEl = qs("summary-data");
 
@@ -184,13 +218,17 @@ async function refreshSummary() {
       grid.innerHTML = currencies
         .map((cur) => {
           const amount = Number(totals[cur] || 0);
-          const style = CURRENCY_STYLE[cur] || { label: cur, color: "text-gray-300", bg: "bg-gray-500" };
+          const style = CURRENCY_STYLE[cur] || {
+            label: cur,
+            color: "text-gray-300",
+            bg: "bg-gray-500",
+          };
 
           return `
             <div class="bg-gray-900 rounded-xl p-3 flex flex-col gap-1">
               <div class="flex items-center gap-1.5">
                 <div class="w-2 h-2 rounded-full ${style.bg} bg-opacity-80 flex-shrink-0"></div>
-                <span class="text-xs font-bold text-gray-400">${style.label}</span>
+                <span class="text-xs font-bold text-gray-400">${escapeHtml(style.label)}</span>
               </div>
               <p class="text-lg font-black ${style.color} leading-tight">${formatAmount(amount)}</p>
               <p class="text-xs text-gray-600 font-mono">${amount.toLocaleString("en-SG", {
@@ -209,7 +247,12 @@ async function refreshSummary() {
 
 function renderSupplierBars(counts = {}) {
   const max = Math.max(...Object.values(counts), 1);
-  const keyMap = { Meta: "meta", Google: "google", Apple: "apple", AdsJoy: "adsjoy" };
+  const keyMap = {
+    Meta: "meta",
+    Google: "google",
+    Apple: "apple",
+    AdsJoy: "adsjoy",
+  };
 
   Object.entries(keyMap).forEach(([label, id]) => {
     const count = counts[label] || 0;
@@ -223,13 +266,12 @@ function renderSupplierBars(counts = {}) {
 
 async function refreshStatus() {
   try {
-    const res = await fetch("/api/status");
-    const d = await res.json();
+    const { data: d } = await getJson("/api/status");
 
-    if (qs("stat-pdfs")) qs("stat-pdfs").textContent = d.pdf_count ?? "—";
-    if (qs("stat-clients")) qs("stat-clients").textContent = d.client_folders ?? "—";
-    if (qs("bubble-pdfs")) qs("bubble-pdfs").textContent = d.pdf_count ?? "—";
-    if (qs("clients-zip-count")) qs("clients-zip-count").textContent = d.client_folders ?? "—";
+    setText(qs("stat-pdfs"), d.pdf_count ?? "—");
+    setText(qs("stat-clients"), d.client_folders ?? "—");
+    setText(qs("bubble-pdfs"), d.pdf_count ?? "—");
+    setText(qs("clients-zip-count"), d.client_folders ?? "—");
 
     const tracker = qs("stat-tracker");
 
@@ -267,9 +309,16 @@ async function refreshStatus() {
     renderGlobalGeminiToggle();
     updateGeminiBadge(Boolean(d.gemini_active ?? (_geminiEnabled && _geminiConfigured)), _geminiConfigured);
 
-    updateDriveUI(Boolean(d.creds_exists && d.folder_id_set), Boolean(d.creds_exists), Boolean(d.folder_id_set));
+    updateDriveUI({
+      fullyConnected: Boolean(d.creds_exists && d.folder_id_set),
+      credsExists: Boolean(d.creds_exists),
+      folderSet: Boolean(d.folder_id_set),
+      authType: d.drive_auth_type || null,
+      tokenExists: Boolean(d.token_exists),
+    });
 
     const lastRefresh = qs("last-refresh");
+
     if (lastRefresh) {
       lastRefresh.textContent =
         "Updated " +
@@ -280,9 +329,10 @@ async function refreshStatus() {
         });
     }
   } catch {
-    if (qs("server-status")) qs("server-status").textContent = "Server unreachable";
+    setText(qs("server-status"), "Server unreachable");
 
     const lastRefresh = qs("last-refresh");
+
     if (lastRefresh) {
       lastRefresh.textContent =
         "Failed " +
@@ -325,10 +375,21 @@ function updateDownloadButtons(d) {
   }
 }
 
-function updateDriveUI(fullyConnected, credsExists, folderSet) {
-  qs("drive-badge-connected")?.classList.toggle("hidden", !fullyConnected);
-  qs("drive-badge-connected")?.classList.toggle("flex", fullyConnected);
-  qs("drive-badge-disconnected")?.classList.toggle("hidden", fullyConnected);
+function driveAuthLabel(authType) {
+  if (authType === "service_account") return "Service Account";
+  if (authType === "oauth") return "OAuth";
+  if (authType === "invalid") return "Invalid Key";
+  if (authType === "unknown") return "Unknown Key";
+  return "";
+}
+
+function updateDriveUI(state) {
+  const fullyConnected = Boolean(state.fullyConnected);
+  const credsExists = Boolean(state.credsExists);
+  const folderSet = Boolean(state.folderSet);
+  const authType = state.authType;
+  const authLabel = driveAuthLabel(authType);
+
   qs("drive-not-connected")?.classList.toggle("hidden", fullyConnected);
   qs("drive-connected")?.classList.toggle("hidden", !fullyConnected);
 
@@ -339,11 +400,11 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
     if (fullyConnected) {
       card.className = "bg-gray-900 border border-green-700 border-opacity-50 rounded-2xl p-6";
       badge.className = "text-xs font-semibold bg-green-500 bg-opacity-20 text-green-400 px-2 py-0.5 rounded-full";
-      badge.textContent = "✓ Connected";
+      badge.textContent = authLabel ? `✓ Connected · ${authLabel}` : "✓ Connected";
     } else if (credsExists && !folderSet) {
       card.className = "bg-gray-900 border border-orange-700 border-opacity-50 rounded-2xl p-6";
       badge.className = "text-xs font-semibold bg-orange-500 bg-opacity-20 text-orange-400 px-2 py-0.5 rounded-full";
-      badge.textContent = "⚠ Folder ID Missing";
+      badge.textContent = authLabel ? `⚠ Folder ID Missing · ${authLabel}` : "⚠ Folder ID Missing";
     } else {
       card.className = "bg-gray-900 border border-yellow-800 border-opacity-40 rounded-2xl p-6";
       badge.className = "text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full";
@@ -353,21 +414,20 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
 
   const mini = qs("drive-mini-badge");
   const label = qs("drive-mini-label");
-  const feat = qs("drive-feature-badge");
-  const pipe = qs("pipe-drive");
-  const pipeBadge = qs("pipe-drive-badge");
 
   if (mini && label) {
     if (fullyConnected) {
       mini.className = "bg-green-500 bg-opacity-10 border border-green-500 border-opacity-20 rounded-xl p-3 text-center";
-      label.textContent = "Connected";
+      label.textContent = authLabel || "Connected";
       label.className = "text-xs text-green-400 mt-0.5";
     } else {
       mini.className = "bg-gray-700 bg-opacity-40 border border-gray-600 border-opacity-30 rounded-xl p-3 text-center";
-      label.textContent = "Not Connected";
+      label.textContent = credsExists ? "Needs Folder ID" : "Not Connected";
       label.className = "text-xs text-gray-400 mt-0.5";
     }
   }
+
+  const feat = qs("drive-feature-badge");
 
   if (feat) {
     feat.textContent = fullyConnected ? "Live" : "Not Connected";
@@ -376,11 +436,15 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
       : "text-xs font-semibold bg-yellow-500 bg-opacity-20 text-yellow-400 px-2 py-0.5 rounded-full";
   }
 
+  const pipe = qs("pipe-drive");
+
   if (pipe) {
     pipe.className = fullyConnected
       ? "pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-900 text-green-300 border border-green-700 border-opacity-50"
       : "pipe-step flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-900 text-yellow-300 border border-yellow-700 border-opacity-50";
   }
+
+  const pipeBadge = qs("pipe-drive-badge");
 
   if (pipeBadge) {
     pipeBadge.textContent = fullyConnected ? "Live" : "Not Connected";
@@ -394,12 +458,13 @@ function updateDriveUI(fullyConnected, credsExists, folderSet) {
 
 async function loadFolderIDDisplay() {
   try {
-    const res = await fetch("/api/drive/config");
-    const data = await res.json();
+    const { data } = await getJson("/api/drive/config");
     const id = data.root_folder_id || "";
 
-    if (qs("folder-id-display-val")) qs("folder-id-display-val").textContent = id || "—";
-    if (qs("folder-id-input-connected")) qs("folder-id-input-connected").value = id;
+    setText(qs("folder-id-display-val"), id || "—");
+
+    const input = qs("folder-id-input-connected");
+    if (input) input.value = id;
   } catch {}
 }
 
@@ -414,15 +479,13 @@ async function saveFolderID() {
   }
 
   try {
-    const res = await fetch("/api/drive/config", {
+    const { res, data } = await getJson("/api/drive/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ root_folder_id: id }),
     });
 
-    const data = await res.json();
-
-    showStatus(status, data.message || (res.ok ? "✓ Saved" : data.error), res.ok ? "text-green-400" : "text-red-400");
+    showStatus(status, data.message || data.error || (res.ok ? "✓ Saved" : "Save failed"), res.ok ? "text-green-400" : "text-red-400");
 
     if (res.ok) {
       input.value = "";
@@ -444,15 +507,13 @@ async function saveFolderIDConnected() {
   }
 
   try {
-    const res = await fetch("/api/drive/config", {
+    const { res, data } = await getJson("/api/drive/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ root_folder_id: id }),
     });
 
-    const data = await res.json();
-
-    showStatus(status, data.message || (res.ok ? "✓ Updated" : data.error), res.ok ? "text-green-400" : "text-red-400");
+    showStatus(status, data.message || data.error || (res.ok ? "✓ Updated" : "Update failed"), res.ok ? "text-green-400" : "text-red-400");
 
     if (res.ok) {
       toggleEditFolderID();
@@ -481,14 +542,19 @@ function replaceCredentials() {
   qs("creds-replace-input")?.click();
 }
 
+function getCredentialStatusEl() {
+  const connected = qs("drive-connected");
+  const isConnected = connected && !connected.classList.contains("hidden");
+
+  return isConnected ? qs("creds-replace-status") || qs("creds-upload-status") : qs("creds-upload-status");
+}
+
 async function removeCredentials() {
-  if (!confirm("Disconnect Google Drive? You can reconnect anytime by uploading credentials.json again.")) return;
+  if (!confirm("Disconnect Google Drive? This will remove credentials.json and token.json if present.")) return;
 
   try {
-    const res = await fetch("/api/credentials/delete", { method: "POST" });
-    const data = await res.json();
-
-    logLine(data.message, "log-warn");
+    const { data } = await getJson("/api/credentials/delete", { method: "POST" });
+    logLine(data.message || "[WARN] Disconnect response received.", "log-warn");
     refreshStatus();
   } catch (e) {
     logLine("[ERR] " + e.message, "log-err");
@@ -498,7 +564,7 @@ async function removeCredentials() {
 async function uploadCredentials(file) {
   if (!file) return;
 
-  const status = qs("creds-upload-status");
+  const status = getCredentialStatusEl();
 
   showStatus(status, "Uploading…", "text-yellow-400", 0);
 
@@ -506,26 +572,30 @@ async function uploadCredentials(file) {
   form.append("file", file);
 
   try {
-    const res = await fetch("/api/upload/credentials", {
+    const { res, data } = await getJson("/api/upload/credentials", {
       method: "POST",
       body: form,
     });
 
-    const data = await res.json();
-
     showStatus(
       status,
-      data.message || (res.ok ? "✓ Key uploaded" : data.error),
+      data.message || data.error || (res.ok ? "✓ Key uploaded" : "Upload failed"),
       res.ok ? "text-green-400" : "text-red-400",
       res.ok ? 3000 : 0
     );
 
     if (res.ok) {
-      if (qs("creds-filename")) qs("creds-filename").textContent = file.name + " · loaded";
+      setText(qs("creds-filename"), file.name + " · loaded");
       refreshStatus();
     }
   } catch (e) {
     showStatus(status, "[ERR] " + e.message, "text-red-400", 0);
+  } finally {
+    const input = qs("creds-input");
+    const replaceInput = qs("creds-replace-input");
+
+    if (input) input.value = "";
+    if (replaceInput) replaceInput.value = "";
   }
 }
 
@@ -575,11 +645,31 @@ function classifyLine(line) {
   return "log-info";
 }
 
-const BTN_IDS = {
-  workflow: "btn-workflow",
-  extract: "btn-extract",
-  sort: "btn-sort",
-};
+async function streamResponseToLog(res) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    lines.forEach((line) => {
+      if (line.trim()) logLine(line, classifyLine(line));
+    });
+  }
+
+  buffer += decoder.decode();
+
+  if (buffer.trim()) {
+    logLine(buffer, classifyLine(buffer));
+  }
+}
 
 async function runStream(type) {
   const btn = qs(BTN_IDS[type]);
@@ -596,22 +686,13 @@ async function runStream(type) {
   try {
     const res = await fetch("/api/run/" + type);
 
-    if (!res.ok) {
-      logLine("[ERR] Server error: " + res.status, "log-err");
+    if (!res.ok && !res.headers.get("content-type")?.includes("text/plain")) {
+      const data = await res.json().catch(() => ({}));
+      logLine(data.message || data.error || "[ERR] Server error: " + res.status, "log-err");
       return;
     }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      decoder.decode(value).split("\n").forEach((line) => {
-        if (line.trim()) logLine(line, classifyLine(line));
-      });
-    }
+    await streamResponseToLog(res);
   } catch (e) {
     logLine("[ERR] " + e.message, "log-err");
   } finally {
@@ -635,22 +716,13 @@ async function runDriveSync() {
 
   try {
     const res = await fetch("/api/drive/sync", { method: "POST" });
+    const type = res.headers.get("content-type") || "";
 
-    if (res.headers.get("content-type")?.includes("text/plain")) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        decoder.decode(value).split("\n").forEach((line) => {
-          if (line.trim()) logLine(line, classifyLine(line));
-        });
-      }
+    if (type.includes("text/plain")) {
+      await streamResponseToLog(res);
     } else {
-      const data = await res.json();
-      logLine(data.message || "Response received.", res.ok ? "log-ok" : "log-warn");
+      const data = await res.json().catch(() => ({}));
+      logLine(data.message || data.error || "Response received.", res.ok ? "log-ok" : "log-warn");
     }
   } catch (e) {
     logLine("[ERR] Drive sync error: " + e.message, "log-err");
@@ -690,14 +762,17 @@ async function uploadFiles(files) {
   }
 
   try {
-    const res = await fetch("/api/upload", {
+    const { res, data } = await getJson("/api/upload", {
       method: "POST",
       body: form,
     });
 
-    const data = await res.json();
-
-    showStatus(status, data.message || "Upload complete", res.ok ? "text-sky-400" : "text-red-400", 4000);
+    showStatus(
+      status,
+      data.message || data.error || "Upload complete",
+      res.ok ? "text-sky-400" : "text-red-400",
+      res.ok ? 4000 : 0
+    );
 
     refreshStatus();
     loadInvoiceList();
@@ -708,10 +783,8 @@ async function uploadFiles(files) {
 
 async function loadInvoiceList() {
   try {
-    const res = await fetch("/api/invoices");
-    const data = await res.json();
+    const { data } = await getJson("/api/invoices");
     const files = data.files || [];
-
     const panel = qs("invoice-list-panel");
     const listEl = qs("invoice-file-list");
     const countEl = qs("invoice-list-count");
@@ -723,6 +796,8 @@ async function loadInvoiceList() {
 
     if (!files.length) {
       panel.classList.add("hidden");
+      listEl.innerHTML = "";
+      countEl.textContent = "0";
       return;
     }
 
@@ -730,26 +805,30 @@ async function loadInvoiceList() {
     countEl.textContent = files.length;
 
     listEl.innerHTML = files
-      .map(
-        (filename) => `
-          <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800 transition group" id="row-${CSS.escape(filename)}">
+      .map((filename) => {
+        const safeHtml = escapeHtml(filename);
+        const safeJs = escapeJsString(filename);
+        const safeId = CSS.escape(filename);
+
+        return `
+          <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800 transition group" id="row-${safeId}">
             <input
               type="checkbox"
               class="invoice-checkbox w-3.5 h-3.5 rounded accent-red-500 cursor-pointer flex-shrink-0"
-              value="${filename}"
+              value="${safeHtml}"
               onchange="onInvoiceCheckbox(this)"
             />
             <span class="text-red-400 text-xs flex-shrink-0">📄</span>
-            <span class="text-xs text-gray-300 font-mono truncate flex-1" title="${filename}">${filename}</span>
+            <span class="text-xs text-gray-300 font-mono truncate flex-1" title="${safeHtml}">${safeHtml}</span>
             <button
-              onclick="deleteSingleInvoice('${filename.replaceAll("'", "\\'")}')"
+              onclick="deleteSingleInvoice('${safeJs}')"
               class="opacity-0 group-hover:opacity-100 text-xs text-gray-600 hover:text-red-400 transition px-1.5 py-0.5 rounded hover:bg-red-500 hover:bg-opacity-10 flex-shrink-0"
-              title="Delete ${filename}">
+              title="Delete ${safeHtml}">
               ✕
             </button>
           </div>
-        `
-      )
+        `;
+      })
       .join("");
   } catch {}
 }
@@ -765,17 +844,18 @@ function onInvoiceCheckbox(checkbox) {
 }
 
 function updateDeleteButton() {
-  const btn = qs("btn-delete-selected");
-  const countEl = qs("selected-count");
   const count = _selectedInvoices.size;
 
-  if (countEl) countEl.textContent = count;
-  if (btn) btn.classList.toggle("hidden", count === 0);
+  setText(qs("selected-count"), count);
+  qs("btn-delete-selected")?.classList.toggle("hidden", count === 0);
 }
 
 function toggleSelectAll() {
-  const checkboxes = document.querySelectorAll(".invoice-checkbox");
-  const allChecked = [...checkboxes].every((cb) => cb.checked);
+  const checkboxes = [...document.querySelectorAll(".invoice-checkbox")];
+
+  if (!checkboxes.length) return;
+
+  const allChecked = checkboxes.every((cb) => cb.checked);
 
   checkboxes.forEach((cb) => {
     cb.checked = !allChecked;
@@ -787,9 +867,7 @@ function toggleSelectAll() {
     }
   });
 
-  const btn = qs("btn-select-all");
-  if (btn) btn.textContent = allChecked ? "Select All" : "Deselect All";
-
+  setText(qs("btn-select-all"), allChecked ? "Select All" : "Deselect All");
   updateDeleteButton();
 }
 
@@ -814,13 +892,11 @@ async function deleteInvoices(filenames) {
   }
 
   try {
-    const res = await fetch("/api/invoices/delete", {
+    const { res, data } = await getJson("/api/invoices/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filenames }),
     });
-
-    const data = await res.json();
 
     if (statusP) {
       if (res.ok) {
@@ -829,7 +905,7 @@ async function deleteInvoices(filenames) {
         setTimeout(() => statusEl?.classList.add("hidden"), 3000);
       } else {
         statusP.className = "text-xs text-red-400";
-        statusP.textContent = `✕ ${data.error || "Delete failed"}`;
+        statusP.textContent = `✕ ${data.error || data.message || "Delete failed"}`;
       }
     }
 
@@ -855,17 +931,24 @@ async function uploadTracker(file) {
   form.append("file", file);
 
   try {
-    const res = await fetch("/api/upload/tracker", {
+    const { res, data } = await getJson("/api/upload/tracker", {
       method: "POST",
       body: form,
     });
 
-    const data = await res.json();
+    showStatus(
+      el,
+      data.message || data.error || (res.ok ? "✓ Uploaded" : "Upload failed"),
+      res.ok ? "text-green-400" : "text-red-400",
+      res.ok ? 4000 : 0
+    );
 
-    showStatus(el, data.message || (res.ok ? "✓ Uploaded" : data.error), res.ok ? "text-green-400" : "text-red-400", 4000);
     refreshStatus();
   } catch (e) {
     showStatus(el, "[ERR] " + e.message, "text-red-400", 0);
+  } finally {
+    const input = qs("tracker-input");
+    if (input) input.value = "";
   }
 }
 
@@ -890,8 +973,8 @@ async function downloadClientsZip() {
     const res = await fetch("/api/download/clients-zip");
 
     if (!res.ok) {
-      const d = await res.json();
-      showStatus(status, d.error || "Download failed", "text-red-400", 0);
+      const d = await res.json().catch(() => ({}));
+      showStatus(status, d.error || d.message || "Download failed", "text-red-400", 0);
       return;
     }
 
@@ -905,6 +988,19 @@ async function downloadClientsZip() {
     btn.disabled = false;
     btn.innerHTML = orig;
   }
+}
+
+function parseFilenameFromDisposition(disposition, fallback) {
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+
+  if (utf8Match) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {}
+  }
+
+  const normalMatch = disposition.match(/filename="?([^"]+)"?/i);
+  return normalMatch ? normalMatch[1] : fallback;
 }
 
 async function downloadTracker() {
@@ -924,15 +1020,14 @@ async function downloadTracker() {
     const res = await fetch("/api/download/tracker");
 
     if (!res.ok) {
-      const d = await res.json();
-      showStatus(status, d.error || "Download failed", "text-red-400", 0);
+      const d = await res.json().catch(() => ({}));
+      showStatus(status, d.error || d.message || "Download failed", "text-red-400", 0);
       return;
     }
 
     const blob = await res.blob();
     const disposition = res.headers.get("Content-Disposition") || "";
-    const match = disposition.match(/filename="?([^"]+)"?/);
-    const filename = match ? match[1] : "tracker.xlsx";
+    const filename = parseFilenameFromDisposition(disposition, "tracker.xlsx");
 
     triggerBlobDownload(blob, filename);
     showStatus(status, "✓ Download started", "text-green-400", 4000);
@@ -969,7 +1064,6 @@ function switchDriveTab(tab) {
   const saContent = qs("modal-tab-sa");
   const oauthBtn = qs("modal-tab-oauth-btn");
   const saBtn = qs("modal-tab-sa-btn");
-
   const isOAuth = tab === "oauth";
 
   oauthContent?.classList.toggle("hidden", !isOAuth);
@@ -999,5 +1093,6 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshStatus();
   loadInvoiceList();
 
-  setInterval(refreshStatus, 8000);
+  if (_statusTimer) clearInterval(_statusTimer);
+  _statusTimer = setInterval(refreshStatus, 8000);
 });

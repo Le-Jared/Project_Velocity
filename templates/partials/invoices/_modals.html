@@ -1,150 +1,159 @@
-<!-- ── Drive Setup Modal ── -->
 <div id="drive-setup-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4">
   <div class="absolute inset-0 bg-black bg-opacity-75 backdrop-blur-sm" onclick="closeDriveSetupModal()"></div>
   <div class="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
-
-    <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-xl bg-yellow-500 bg-opacity-10 flex items-center justify-center text-lg">☁️</div>
         <div>
           <p class="font-extrabold text-white text-sm">Google Drive Sync — Setup Guide</p>
-          <p class="text-xs text-gray-500 mt-0.5">Choose the method that matches your Google account type</p>
+          <p class="text-xs text-gray-500 mt-0.5">Choose OAuth for local use or Service Account for automation</p>
         </div>
       </div>
       <button onclick="closeDriveSetupModal()" class="text-gray-600 hover:text-white text-xl leading-none transition">✕</button>
     </div>
 
-    <!-- Tab Switcher -->
     <div class="flex border-b border-gray-800">
       <button id="modal-tab-oauth-btn" onclick="switchDriveTab('oauth')"
         class="flex-1 py-3 text-xs font-bold transition border-b-2 border-blue-500 text-blue-400 bg-blue-500 bg-opacity-5">
-        👤 Personal Gmail / OAuth
+        👤 OAuth
       </button>
       <button id="modal-tab-sa-btn" onclick="switchDriveTab('sa')"
         class="flex-1 py-3 text-xs font-bold transition border-b-2 border-transparent text-gray-500 hover:text-gray-300">
-        🏢 Google Workspace / Service Account
+        🔐 Service Account
       </button>
     </div>
 
-    <!-- OAuth Tab -->
     <div id="modal-tab-oauth" class="p-6 space-y-4 max-h-96 overflow-y-auto">
       <div class="flex items-start gap-3 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-30 rounded-xl px-4 py-3">
         <span class="text-blue-400 text-base flex-shrink-0 mt-0.5">👤</span>
         <div>
-          <p class="text-xs font-bold text-blue-300 mb-0.5">Works with any personal Gmail account</p>
-          <p class="text-xs text-gray-400">No IT admin needed. Uses OAuth 2.0 — opens a browser sign-in on first run, then saves a token automatically.</p>
+          <p class="text-xs font-bold text-blue-300 mb-0.5">Best for local use with Gmail or Workspace user accounts</p>
+          <p class="text-xs text-gray-400">Uses OAuth 2.0. First sync opens a browser sign-in, then saves <code class="text-blue-300 bg-gray-800 px-1 rounded">token.json</code> for future syncs.</p>
         </div>
       </div>
+
       <div class="space-y-3">
         <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Setup Steps</p>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">1</div>
           <div>
-            <p class="text-xs font-semibold text-white">Create a free Google Cloud project</p>
-            <p class="text-xs text-gray-400 mt-0.5">Go to <code class="text-blue-300 bg-gray-800 px-1 rounded">console.cloud.google.com</code> → New Project (e.g. <code class="text-gray-300 bg-gray-800 px-1 rounded">project-velocity</code>)</p>
+            <p class="text-xs font-semibold text-white">Create a Google Cloud project</p>
+            <p class="text-xs text-gray-400 mt-0.5">Go to <code class="text-blue-300 bg-gray-800 px-1 rounded">console.cloud.google.com</code> → New Project</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">2</div>
           <div>
             <p class="text-xs font-semibold text-white">Enable Google Drive API</p>
-            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Library → search <span class="text-white font-semibold">"Google Drive API"</span> → Enable</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Library → search <span class="text-white font-semibold">Google Drive API</span> → Enable</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">3</div>
           <div>
-            <p class="text-xs font-semibold text-white">Create OAuth 2.0 credentials</p>
-            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Credentials → <span class="text-white font-semibold">Create Credentials → OAuth 2.0 Client ID</span></p>
-            <p class="text-xs text-gray-400 mt-0.5">Application type: <span class="text-white font-semibold">Desktop App</span> → Download JSON</p>
+            <p class="text-xs font-semibold text-white">Configure OAuth consent screen</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → OAuth consent screen → choose External or Internal → add your account as a test user if required</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">4</div>
           <div>
-            <p class="text-xs font-semibold text-white">Configure OAuth consent screen</p>
-            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → OAuth consent screen → External → Add your Gmail as a <span class="text-white font-semibold">Test User</span></p>
+            <p class="text-xs font-semibold text-white">Create OAuth Desktop credentials</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Credentials → Create Credentials → OAuth client ID → Desktop App → Download JSON</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">5</div>
           <div>
-            <p class="text-xs font-semibold text-white">Rename &amp; upload the downloaded JSON</p>
-            <p class="text-xs text-gray-400 mt-0.5">Rename to <code class="text-blue-300 bg-gray-800 px-1 rounded">credentials.json</code> and upload it in the Drive Sync card below</p>
+            <p class="text-xs font-semibold text-white">Upload the JSON file</p>
+            <p class="text-xs text-gray-400 mt-0.5">Rename it to <code class="text-blue-300 bg-gray-800 px-1 rounded">credentials.json</code> and upload it in the Drive Sync card</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-blue-400 flex-shrink-0 mt-0.5">6</div>
           <div>
-            <p class="text-xs font-semibold text-white">Set your Drive Folder ID &amp; run sync</p>
-            <p class="text-xs text-gray-400 mt-0.5">On first sync a browser window opens for Google sign-in. After approving, <code class="text-blue-300 bg-gray-800 px-1 rounded">token.json</code> is saved — fully automatic from then on.</p>
+            <p class="text-xs font-semibold text-white">Set Folder ID and run sync</p>
+            <p class="text-xs text-gray-400 mt-0.5">On first sync, sign in and approve access. Future syncs reuse <code class="text-blue-300 bg-gray-800 px-1 rounded">token.json</code>.</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Service Account Tab -->
     <div id="modal-tab-sa" class="p-6 space-y-4 max-h-96 overflow-y-auto hidden">
       <div class="flex items-start gap-3 bg-purple-500 bg-opacity-10 border border-purple-500 border-opacity-30 rounded-xl px-4 py-3">
-        <span class="text-purple-400 text-base flex-shrink-0 mt-0.5">🏢</span>
+        <span class="text-purple-400 text-base flex-shrink-0 mt-0.5">🔐</span>
         <div>
-          <p class="text-xs font-bold text-purple-300 mb-0.5">Requires Google Workspace or Google Cloud org access</p>
-          <p class="text-xs text-gray-400">Uses a Service Account — no browser sign-in needed. Best for automated / server deployments. Contact your IT admin if you don't have Cloud Console access.</p>
+          <p class="text-xs font-bold text-purple-300 mb-0.5">Best for automated or server deployments</p>
+          <p class="text-xs text-gray-400">Uses a Service Account key. No browser sign-in needed. The target Drive folder must be shared with the service account email.</p>
         </div>
       </div>
+
       <div class="space-y-3">
         <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Setup Steps</p>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">1</div>
           <div>
-            <p class="text-xs font-semibold text-white">Open Google Cloud Console</p>
+            <p class="text-xs font-semibold text-white">Create or open a Google Cloud project</p>
             <p class="text-xs text-gray-400 mt-0.5">Go to <code class="text-purple-300 bg-gray-800 px-1 rounded">console.cloud.google.com</code> → select or create a project</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">2</div>
           <div>
             <p class="text-xs font-semibold text-white">Enable Google Drive API</p>
-            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Library → search <span class="text-white font-semibold">"Google Drive API"</span> → Enable</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Library → search <span class="text-white font-semibold">Google Drive API</span> → Enable</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">3</div>
           <div>
             <p class="text-xs font-semibold text-white">Create a Service Account</p>
-            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Credentials → <span class="text-white font-semibold">Create Credentials → Service Account</span></p>
-            <p class="text-xs text-gray-400 mt-0.5">Give it a name (e.g. <code class="text-gray-300 bg-gray-800 px-1 rounded">velocity-drive-sync</code>) → Done</p>
+            <p class="text-xs text-gray-400 mt-0.5">APIs &amp; Services → Credentials → Create Credentials → Service Account</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">4</div>
           <div>
-            <p class="text-xs font-semibold text-white">Download the JSON key</p>
-            <p class="text-xs text-gray-400 mt-0.5">Click the service account → Keys tab → <span class="text-white font-semibold">Add Key → Create new key → JSON</span> → Download</p>
+            <p class="text-xs font-semibold text-white">Download JSON key</p>
+            <p class="text-xs text-gray-400 mt-0.5">Open the service account → Keys → Add Key → Create new key → JSON</p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">5</div>
           <div>
-            <p class="text-xs font-semibold text-white">Share your Drive folder with the service account</p>
-            <p class="text-xs text-gray-400 mt-0.5">Open the target folder in Drive → Share → paste the <code class="text-purple-300 bg-gray-800 px-1 rounded">client_email</code> from the JSON → set role to <span class="text-white font-semibold">Editor</span></p>
+            <p class="text-xs font-semibold text-white">Share the target Drive folder</p>
+            <p class="text-xs text-gray-400 mt-0.5">Open the downloaded JSON → copy <code class="text-purple-300 bg-gray-800 px-1 rounded">client_email</code> → share your target Drive folder with that email as <span class="text-white font-semibold">Editor</span></p>
           </div>
         </div>
+
         <div class="flex items-start gap-3">
           <div class="w-6 h-6 rounded-full bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-40 flex items-center justify-center text-xs font-bold text-purple-400 flex-shrink-0 mt-0.5">6</div>
           <div>
-            <p class="text-xs font-semibold text-white">Rename &amp; upload the JSON key</p>
-            <p class="text-xs text-gray-400 mt-0.5">Rename to <code class="text-purple-300 bg-gray-800 px-1 rounded">credentials.json</code> and upload it below. No browser sign-in needed — syncs silently.</p>
+            <p class="text-xs font-semibold text-white">Upload the JSON key</p>
+            <p class="text-xs text-gray-400 mt-0.5">Rename it to <code class="text-purple-300 bg-gray-800 px-1 rounded">credentials.json</code> and upload it in the Drive Sync card.</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Footer -->
-    <div class="px-6 py-4 border-t border-gray-800 flex items-center justify-between">
-      <p class="text-xs text-gray-600">Both methods use the same <code class="text-gray-500">credentials.json</code> filename — the app auto-detects which type it is.</p>
-      <button onclick="closeDriveSetupModal()" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold text-xs transition">Close</button>
+    <div class="px-6 py-4 border-t border-gray-800 flex items-center justify-between gap-4">
+      <p class="text-xs text-gray-600">
+        Both methods use <code class="text-gray-500">credentials.json</code>. The app auto-detects OAuth vs Service Account.
+      </p>
+      <button onclick="closeDriveSetupModal()" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold text-xs transition">
+        Close
+      </button>
     </div>
   </div>
 </div>
