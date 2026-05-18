@@ -23,15 +23,15 @@
           <span id="invoice-list-count" class="text-xs font-semibold bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">0</span>
         </div>
         <div class="flex items-center gap-2">
-          <button onclick="toggleSelectAll()"
-            id="btn-select-all"
-            class="text-xs font-semibold text-gray-400 hover:text-white transition px-2 py-1 rounded-lg hover:bg-gray-700">
-            Select All
-          </button>
           <button onclick="deleteSelectedInvoices()"
             id="btn-delete-selected"
             class="hidden text-xs font-bold text-red-400 hover:text-white hover:bg-red-600 transition px-3 py-1 rounded-lg border border-red-700 border-opacity-50">
             🗑️ Delete Selected (<span id="selected-count">0</span>)
+          </button>
+          <button onclick="toggleSelectAll()"
+            id="btn-select-all"
+            class="text-xs font-semibold text-gray-400 hover:text-white transition px-2 py-1 rounded-lg hover:bg-gray-700">
+            Select All
           </button>
         </div>
       </div>

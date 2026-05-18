@@ -5,6 +5,7 @@ import json
 import io
 import os
 import sys
+import csv
 import queue
 import zipfile
 import subprocess
@@ -122,6 +123,61 @@ def gemini_status_payload():
     }
 
 
+def get_invoice_supplier_counts_from_report():
+    counts = {
+        "Meta": 0,
+        "Google": 0,
+        "Apple": 0,
+        "AdsJoy": 0,
+    }
+
+    if not os.path.exists(REPORT_PATH):
+        return counts
+
+    try:
+        seen = set()
+
+        with open(REPORT_PATH, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                status = str(row.get("status", "")).strip()
+                supplier = str(row.get("supplier", "")).strip()
+                original_file = str(row.get("original_file", "")).strip()
+
+                if status != "OK - copied":
+                    continue
+
+                if supplier not in counts:
+                    continue
+
+                if not original_file:
+                    continue
+
+                key = (supplier, original_file)
+
+                if key in seen:
+                    continue
+
+                seen.add(key)
+                counts[supplier] += 1
+
+        return counts
+
+    except Exception:
+        return counts
+
+
+def get_uploaded_pdf_count():
+    pdf_count = 0
+
+    if os.path.exists(INVOICE_FOLDER):
+        for _, _, files in os.walk(INVOICE_FOLDER):
+            pdf_count += sum(1 for f in files if f.lower().endswith(".pdf"))
+
+    return pdf_count
+
+
 def stream_script(script_name, q):
     try:
         script_path = os.path.join(BASE_DIR, script_name)
@@ -215,11 +271,9 @@ def api_gemini_toggle():
 
 @app.route("/api/status")
 def status():
-    pdf_count = 0
-
-    if os.path.exists(INVOICE_FOLDER):
-        for _, _, files in os.walk(INVOICE_FOLDER):
-            pdf_count += sum(1 for f in files if f.lower().endswith(".pdf"))
+    supplier_counts = get_invoice_supplier_counts_from_report()
+    successful_invoice_count = sum(supplier_counts.values())
+    pdf_count = successful_invoice_count or get_uploaded_pdf_count()
 
     client_list = []
 
@@ -228,30 +282,6 @@ def status():
             d for d in os.listdir(CLIENTS_FOLDER)
             if os.path.isdir(os.path.join(CLIENTS_FOLDER, d))
         ]
-
-    supplier_counts = {
-        "Meta": 0,
-        "Google": 0,
-        "Apple": 0,
-        "AdsJoy": 0,
-    }
-
-    if os.path.exists(CLIENTS_FOLDER):
-        for _, _, files in os.walk(CLIENTS_FOLDER):
-            for f in files:
-                if not f.lower().endswith(".pdf"):
-                    continue
-
-                fl = f.lower()
-
-                if "_meta_" in fl:
-                    supplier_counts["Meta"] += 1
-                elif "_google_" in fl:
-                    supplier_counts["Google"] += 1
-                elif "_apple_" in fl:
-                    supplier_counts["Apple"] += 1
-                elif "_adsjoy_" in fl:
-                    supplier_counts["AdsJoy"] += 1
 
     tracker_exists = os.path.exists(TRACKER_INPUT) or os.path.exists(TRACKER_OUTPUT)
     report_exists = os.path.exists(REPORT_PATH)
@@ -272,6 +302,8 @@ def status():
 
     return jsonify({
         "pdf_count": pdf_count,
+        "uploaded_pdf_count": get_uploaded_pdf_count(),
+        "processed_invoice_count": successful_invoice_count,
         "client_folders": len(client_list),
         "client_list": client_list,
         "supplier_counts": supplier_counts,
