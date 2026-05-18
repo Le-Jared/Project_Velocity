@@ -30,7 +30,6 @@ INVOICE_FOLDER = "./invoices"
 YEAR = 2026
 SEP = "=" * 72
 SUB_SEP = "-" * 72
-
 WHITE = "FFFFFF"
 DARK = "1A1A1A"
 
@@ -46,6 +45,7 @@ CURRENCY_COLOURS = {
     "MYR": "FFF8E1",
     "SGD": "E3F2FD",
     "USD": "F3E5F5",
+    "GBP": "ECEFF1",
 }
 
 CURRENCY_HEADER = {
@@ -53,6 +53,7 @@ CURRENCY_HEADER = {
     "MYR": "F57F17",
     "SGD": "1565C0",
     "USD": "6A1B9A",
+    "GBP": "455A64",
 }
 
 META_ENTITY_MARKET = {
@@ -83,7 +84,60 @@ SUPPLIER_LABELS = {
     "adsjoy": "AdsJoy",
     "apple": "Apple (ASA)",
     "google": "Google",
-    "meta": "Meta",
+    "meta": "Meta (Facebook)",
+}
+
+STANDARD_SUPPLIER_NAMES = {
+    "adsjoy": "AdsJoy",
+    "AdsJoy": "AdsJoy",
+    "Adsjoy": "AdsJoy",
+    "apple": "Apple (ASA)",
+    "Apple ( ASA )": "Apple (ASA)",
+    "Apple (ASA)": "Apple (ASA)",
+    "Apple ASA": "Apple (ASA)",
+    "Apple Search Ads": "Apple (ASA)",
+    "google": "Google",
+    "Google": "Google",
+    "meta": "Meta (Facebook)",
+    "Meta": "Meta (Facebook)",
+    "Meta (facebook)": "Meta (Facebook)",
+    "Meta (Facebook)": "Meta (Facebook)",
+    "Facebook": "Meta (Facebook)",
+    "Meta Facebook": "Meta (Facebook)",
+}
+
+CLIENT_CANONICAL = {
+    "AMA": "Ama",
+    "AMA PROSPER": "Ama",
+    "FJPH": "FJPH",
+    "AFID": "AFID",
+    "BMYFF": "BMYFF",
+    "LGL": "LGL",
+    "BHC": "BHC",
+    "MF": "MF",
+    "PD": "PD",
+    "OG": "OG",
+    "GU": "GU",
+    "GT": "GT",
+}
+
+STANDARD_COLUMNS = {
+    "Adsjoy": [
+        "Year", "Supplier Name", "Month of Service", "Month of Billing",
+        "Client", "Invoice number", "Campaign", "Campaign ID", "Currency", "Amount",
+    ],
+    "Apple (ASA)": [
+        "Year", "Supplier Name", "Client", "Month of Service", "Month of Billing",
+        "Invoice number", "Campaign", "Campaign ID", "Currency", "Amount", "Market",
+    ],
+    "Google": [
+        "Year", "Supplier Name", "Ad Account Name", "Month of Service", "Month of Billing",
+        "Client", "Invoice number", "Campaign", "Campaign ID", "Currency", "Amount",
+    ],
+    "Meta (facebook)": [
+        "Year", "Supplier Name", "Ad Account ID", "Month of Service", "Month of Billing",
+        "Client", "Invoice number", "Campaign", "Campaign ID", "Currency", "Amount", "Market",
+    ],
 }
 
 MONTH_ABBR = {m[:3].lower(): m for m in month_name if m}
@@ -96,14 +150,11 @@ def now_str():
 def duration_str(seconds):
     if seconds < 60:
         return f"{seconds:.1f}s"
-    mins = int(seconds // 60)
-    secs = seconds % 60
-    return f"{mins}m {secs:.1f}s"
+    return f"{int(seconds // 60)}m {seconds % 60:.1f}s"
 
 
 def log(level, msg="", indent=0):
-    prefix = " " * indent
-    print(f"{prefix}[{level}] {msg}" if msg else "")
+    print(f"{' ' * indent}[{level}] {msg}" if msg else "")
 
 
 def print_header():
@@ -125,12 +176,40 @@ def clean_amount(val):
     if val is None:
         return None
 
-    cleaned = re.sub(r"[^\d.-]", "", str(val).replace(",", "").replace(" ", "").strip())
+    val = str(val).strip()
+
+    if val == "" or val.lower() in {"nan", "none", "null", "nat"}:
+        return None
+
+    negative = val.startswith("(") and val.endswith(")")
+    cleaned = re.sub(r"[^\d.-]", "", val.replace(",", "").replace(" ", ""))
+
+    if cleaned in {"", ".", "-", "-."}:
+        return None
 
     try:
-        return float(cleaned)
+        amount = float(cleaned)
+        return -abs(amount) if negative else amount
     except ValueError:
         return None
+
+
+def is_reasonable_amount(amount, currency):
+    amount = clean_amount(amount)
+
+    if amount is None:
+        return False
+
+    limits = {
+        "USD": 5_000_000,
+        "SGD": 5_000_000,
+        "MYR": 20_000_000,
+        "GBP": 5_000_000,
+        "IDR": 100_000_000_000,
+    }
+
+    currency = str(currency or "").strip().upper()
+    return abs(amount) <= limits.get(currency, 10_000_000)
 
 
 def first_match(patterns, text, flags=re.I, group=1, default=""):
@@ -149,13 +228,38 @@ def normalize_month(mon, year):
     if not mon or not year:
         return ""
 
-    full = MONTH_ABBR.get(mon[:3].lower(), mon.capitalize())
     year = str(year)
-
     if len(year) == 2:
         year = f"20{year}"
 
-    return f"{full} {year}"
+    return f"{MONTH_ABBR.get(mon[:3].lower(), mon.capitalize())} {year}"
+
+
+def normalize_month_value(value):
+    if pd.isna(value) or value == "":
+        return ""
+
+    value = str(value).strip()
+
+    if value.lower() in {"nan", "none", "null", "nat"}:
+        return ""
+
+    m = re.match(r"^([A-Za-z]+)\s+(20\d{2})$", value)
+    if m:
+        return normalize_month(m.group(1), m.group(2))
+
+    m = re.match(r"^([A-Za-z]{3})-?(\d{2})$", value)
+    if m:
+        return normalize_month(m.group(1), m.group(2))
+
+    try:
+        dt = pd.to_datetime(value, errors="coerce")
+        if pd.notna(dt):
+            return dt.strftime("%B %Y")
+    except Exception:
+        pass
+
+    return value
 
 
 def billing_period_to_str(raw):
@@ -172,7 +276,7 @@ def billing_period_to_str(raw):
     if m:
         return normalize_month(m.group(1), m.group(2))
 
-    return raw
+    return normalize_month_value(raw)
 
 
 def extract_month_from_text_or_filename(text, filename):
@@ -180,28 +284,199 @@ def extract_month_from_text_or_filename(text, filename):
         r"([A-Za-z]{3})'(\d{2})",
         r"Summary\s+for\s+\d{1,2}\s+([A-Za-z]+)\s+(\d{4})",
         r"Billing\s*Period\s*[:\s]*\d{1,2}\s+([A-Za-z]+)\s+(\d{4})",
+        r"Billing\s*Period[:\s]*([A-Za-z]{3}-\d{2})",
         r"([A-Za-z]{3,})\s+(20\d{2})",
     ]
 
     for pattern in patterns:
         m = re.search(pattern, text, re.I)
         if m:
-            return normalize_month(m.group(1), m.group(2))
+            return billing_period_to_str(m.group(1)) if len(m.groups()) == 1 else normalize_month(m.group(1), m.group(2))
 
     m = re.search(r"_([A-Za-z]{3})_(\d{2})_", filename, re.I)
-    if m:
-        return normalize_month(m.group(1), m.group(2))
-
-    m = re.search(r"Billing\s*Period[:\s]*([A-Za-z]{3}-\d{2})", text, re.I)
-    if m:
-        return billing_period_to_str(m.group(1))
-
-    return ""
+    return normalize_month(m.group(1), m.group(2)) if m else ""
 
 
 def extract_currency(text, default="USD"):
     match = re.search(r"\b(USD|SGD|MYR|IDR|AUD|GBP|PHP|INR)\b", text, re.I)
     return match.group(1).upper() if match else default
+
+
+def normalize_supplier_name(value):
+    if pd.isna(value):
+        return ""
+
+    value = str(value).strip()
+    return STANDARD_SUPPLIER_NAMES.get(value, value)
+
+
+def normalize_client(value):
+    if pd.isna(value):
+        return ""
+
+    value = str(value).strip()
+
+    if value.lower() in {"nan", "none", "null", "nat"}:
+        return ""
+
+    return CLIENT_CANONICAL.get(value.upper(), value)
+
+
+def get_invoice_col(df):
+    if df is None or df.empty:
+        return None
+
+    return next(
+        (c for c in df.columns if "invoice" in str(c).lower() and "number" in str(c).lower()),
+        None,
+    )
+
+
+def invoice_exists(tracker_df, invoice_number):
+    if tracker_df is None or tracker_df.empty or not invoice_number:
+        return False
+
+    inv_col = get_invoice_col(tracker_df)
+    if not inv_col:
+        return False
+
+    return str(invoice_number).strip() in tracker_df[inv_col].astype(str).str.strip().values
+
+
+def invoice_has_campaign_rows(tracker_df, invoice_number):
+    if tracker_df is None or tracker_df.empty or not invoice_number:
+        return False
+
+    inv_col = get_invoice_col(tracker_df)
+
+    if not inv_col or "Campaign" not in tracker_df.columns:
+        return False
+
+    sub = tracker_df[
+        tracker_df[inv_col].astype(str).str.strip().eq(str(invoice_number).strip())
+    ]
+
+    return not sub.empty and sub["Campaign"].fillna("").astype(str).str.strip().ne("").any()
+
+
+def clean_text_columns(df):
+    if df.empty:
+        return df
+
+    df = df.copy()
+
+    for col in df.columns:
+        if df[col].dtype == "object":
+            df[col] = (
+                df[col]
+                .astype(str)
+                .replace({"nan": "", "None": "", "NaT": "", "nat": ""})
+                .str.strip()
+            )
+
+    return df
+
+
+def remove_duplicate_columns(df):
+    if df.empty:
+        return df
+
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.loc[:, ~df.columns.duplicated()]
+
+    if "Month" in df.columns and "Year" in df.columns:
+        df = df.drop(columns=["Month"], errors="ignore")
+
+    currency_cols = [c for c in df.columns if c.strip().lower() == "currency"]
+
+    if len(currency_cols) > 1:
+        base = currency_cols[0]
+        for c in currency_cols[1:]:
+            df[base] = df[base].replace("", pd.NA).fillna(df[c])
+            df = df.drop(columns=[c], errors="ignore")
+
+    return df
+
+
+def remove_total_or_blank_rows(df):
+    if df.empty:
+        return df
+
+    df = df.copy().dropna(how="all").replace(["nan", "None", "NaT", "nat"], "")
+
+    invoice_col = get_invoice_col(df)
+    client_col = "Client" if "Client" in df.columns else None
+    amount_col = "Amount" if "Amount" in df.columns else None
+
+    if amount_col:
+        df[amount_col] = df[amount_col].apply(clean_amount)
+
+        required_cols = [
+            c for c in ["Supplier Name", "Client", "Invoice number", "Currency"]
+            if c in df.columns
+        ]
+
+        if required_cols:
+            mask_total_only = (
+                df[required_cols]
+                .fillna("")
+                .astype(str)
+                .apply(lambda row: all(v.strip() == "" for v in row), axis=1)
+            ) & df[amount_col].notna()
+
+            df = df[~mask_total_only]
+
+    if invoice_col and client_col:
+        df = df[
+            ~(
+                df[invoice_col].fillna("").astype(str).str.strip().eq("")
+                & df[client_col].fillna("").astype(str).str.strip().eq("")
+            )
+        ]
+
+    return df.reset_index(drop=True)
+
+
+def standardize_tracker_sheet(df, sheet_name):
+    standard_cols = STANDARD_COLUMNS.get(sheet_name, [])
+
+    if df.empty:
+        return pd.DataFrame(columns=standard_cols)
+
+    df = remove_total_or_blank_rows(clean_text_columns(remove_duplicate_columns(df.copy())))
+
+    if "Supplier Name" in df.columns:
+        df["Supplier Name"] = df["Supplier Name"].apply(normalize_supplier_name)
+
+    if "Client" in df.columns:
+        df["Client"] = df["Client"].apply(normalize_client)
+
+    currency_col = next((c for c in df.columns if str(c).strip().lower() == "currency"), None)
+
+    if currency_col:
+        if currency_col != "Currency":
+            df = df.rename(columns={currency_col: "Currency"})
+        df["Currency"] = df["Currency"].astype(str).str.strip().str.upper()
+
+    if "Amount" in df.columns:
+        df["Amount"] = df["Amount"].apply(clean_amount)
+
+    for col in ["Month of Service", "Month of Billing"]:
+        if col in df.columns:
+            df[col] = df[col].apply(normalize_month_value)
+
+    if "Year" not in df.columns:
+        df.insert(0, "Year", YEAR)
+    else:
+        df["Year"] = df["Year"].apply(lambda x: YEAR if pd.isna(x) or str(x).strip() == "" else x)
+
+    for col in standard_cols:
+        if col not in df.columns:
+            df[col] = ""
+
+    extra_cols = [c for c in df.columns if c not in standard_cols]
+    return df[standard_cols + extra_cols].reset_index(drop=True)
 
 
 def read_pdf_text(pdf_path):
@@ -220,14 +495,14 @@ def detect_supplier_from_content(text, filename):
     t = text.upper()
     fname = os.path.basename(filename).upper()
 
-    content_rules = [
+    rules = [
         ("adsjoy", ["ADSJOY DIGITAL", "ADSJOY"]),
         ("apple", ["APPLE DISTRIBUTION", "APPLE SERVICES LATAM", "APPLE SEARCH ADS"]),
         ("meta", ["FACEBOOK", "META PLATFORMS"]),
         ("google", ["GOOGLE ADS", "PT GOOGLE", "GOOGLE LLC", "GOOGLE IRELAND", "GOOGLE ASIA PACIFIC", "COLLECTIONS@GOOGLE.COM"]),
     ]
 
-    for supplier, keywords in content_rules:
+    for supplier, keywords in rules:
         if any(k in t for k in keywords):
             return supplier
 
@@ -259,42 +534,9 @@ def scan_invoices(root_folder):
                 log("ERR", f"Could not read {filename}: {e}", indent=2)
                 text, tables = "", []
 
-            supplier = detect_supplier_from_content(text, pdf_path)
-            results.append((pdf_path, supplier, text, tables))
+            results.append((pdf_path, detect_supplier_from_content(text, pdf_path), text, tables))
 
     return results
-
-
-def fix_date_columns(df):
-    if df.empty:
-        return df
-
-    for col in df.columns:
-        if any(k in col.lower() for k in ["month", "billing"]):
-            try:
-                converted = pd.to_datetime(df[col], errors="coerce").dt.strftime("%B %Y")
-                mask = converted.notna()
-                df.loc[mask, col] = converted[mask]
-            except Exception:
-                pass
-
-    return df
-
-
-def invoice_exists(tracker_df, invoice_number):
-    if tracker_df is None or tracker_df.empty or not invoice_number:
-        return False
-
-    inv_col = next(
-        (c for c in tracker_df.columns if "invoice" in c.lower() and "number" in c.lower()),
-        None,
-    )
-
-    if not inv_col:
-        return False
-
-    existing = tracker_df[inv_col].astype(str).str.strip()
-    return invoice_number.strip() in existing.values
 
 
 def enrich_with_gemini(base, text, supplier, pdf_path):
@@ -304,46 +546,99 @@ def enrich_with_gemini(base, text, supplier, pdf_path):
     try:
         enriched = enrich_extraction(base, text, supplier, pdf_path=pdf_path) or {}
         result = base.copy()
-        result.update({k: v for k, v in enriched.items() if v not in [None, ""]})
+
+        for key, value in enriched.items():
+            if value in [None, ""]:
+                continue
+
+            current = result.get(key)
+
+            if current in [None, "", "UNKNOWN"] or str(current).strip().upper() in {"UNKNOWN", "BANK"}:
+                result[key] = value
+
         return result
+
     except Exception as e:
         log("WARN", f"Gemini enrichment failed for {os.path.basename(pdf_path)}: {e}", indent=2)
         return base
 
 
 def make_row(supplier, **kwargs):
+    month = normalize_month_value(kwargs.get("month", ""))
+
     row = {
         "Year": YEAR,
-        "Supplier Name": supplier,
-        "Month of Service": kwargs.get("month", ""),
-        "Month of Billing": kwargs.get("billing_month", kwargs.get("month", "")),
-        "Client": kwargs.get("client", ""),
-        "Invoice number": kwargs.get("invoice_number", ""),
-        "Currency": kwargs.get("currency", ""),
-        "Amount": kwargs.get("amount"),
+        "Supplier Name": normalize_supplier_name(supplier),
+        "Month of Service": month,
+        "Month of Billing": normalize_month_value(kwargs.get("billing_month", month)),
+        "Client": normalize_client(kwargs.get("client", "")),
+        "Invoice number": str(kwargs.get("invoice_number", "") or "").strip(),
+        "Currency": str(kwargs.get("currency", "") or "").strip().upper(),
+        "Amount": clean_amount(kwargs.get("amount")),
     }
 
-    optional_fields = [
-        "Market",
-        "Ad Account ID",
-        "Campaign",
-        "Campaign ID",
-    ]
-
-    for field in optional_fields:
+    for field in ["Market", "Ad Account ID", "Ad Account Name", "Campaign", "Campaign ID"]:
         if field in kwargs:
-            row[field] = kwargs.get(field)
+            row[field] = str(kwargs.get(field, "") or "").strip()
 
     return row
 
 
-def parse_adsjoy_pdf(pdf_path, text, tables):
+def filter_rows_against_existing(tracker_df, rows, supplier):
+    if not rows:
+        return []
+
+    if tracker_df is None or tracker_df.empty:
+        return rows
+
+    filtered = []
+
+    for row in rows:
+        inv = str(row.get("Invoice number", "") or "").strip()
+        campaign = str(row.get("Campaign", "") or "").strip()
+        amount = clean_amount(row.get("Amount"))
+        currency = str(row.get("Currency", "") or "").strip().upper()
+
+        if not inv or not is_reasonable_amount(amount, currency):
+            if inv:
+                log("SKIP", f"{supplier}: invalid amount | invoice {inv} | {currency} {amount}", indent=2)
+            continue
+
+        exists = invoice_exists(tracker_df, inv)
+        has_campaign_rows = invoice_has_campaign_rows(tracker_df, inv)
+
+        if supplier == "adsjoy" and exists:
+            log("SKIP", f"AdsJoy invoice {inv} already exists", indent=2)
+            continue
+
+        if supplier in {"apple", "google"} and exists:
+            log("SKIP", f"{SUPPLIER_LABELS[supplier]} invoice {inv} already exists", indent=2)
+            continue
+
+        if supplier == "meta" and exists and not campaign:
+            log("SKIP", f"Meta blank-campaign row skipped for existing invoice {inv}", indent=2)
+            continue
+
+        if exists and has_campaign_rows and not campaign:
+            log("SKIP", f"Blank campaign total row skipped for existing invoice {inv}", indent=2)
+            continue
+
+        filtered.append(row)
+
+    return filtered
+
+
+def parse_adsjoy_pdf(pdf_path, text, tables, tracker_df=None):
     fname = os.path.basename(pdf_path)
 
     invoice_number = first_match([
         r"Invoice[:\s#]*([0-9]{2}-[0-9]{2}/[A-Za-z]{3}/[0-9]+)",
         r"Invoice\s*(?:No\.?|Number|#)?\s*[:\s]*([0-9\-/A-Za-z]+(?:/[0-9A-Za-z]+)*)",
     ], text)
+
+    if invoice_exists(tracker_df, invoice_number):
+        log("SKIP", f"AdsJoy invoice {invoice_number} already exists", indent=2)
+        return []
 
     client = first_match([
         r"For\s+ADSJOY\s+DIGITAL\s*\n([A-Z]{2,6})\s",
@@ -353,6 +648,9 @@ def parse_adsjoy_pdf(pdf_path, text, tables):
 
     if not client:
         client = first_match(r"SAATCHI_([A-Z]+)_", fname).upper() or "UNKNOWN"
+
+    if client.upper() in {"BANK", "ACCOUNT", "INVOICE", "TOTAL"}:
+        client = "UNKNOWN"
 
     month = extract_month_from_text_or_filename(text, fname)
     currency = extract_currency(text, "USD")
@@ -389,7 +687,11 @@ def parse_adsjoy_pdf(pdf_path, text, tables):
     client = enriched.get("client", client)
     month = enriched.get("month", month)
     currency = enriched.get("currency", currency)
-    amount = clean_amount(enriched.get("amount")) if amount is None else amount
+    amount = amount if amount is not None else clean_amount(enriched.get("amount"))
+
+    if not is_reasonable_amount(amount, currency):
+        log("SKIP", f"AdsJoy invoice {invoice_number} unreasonable amount: {currency} {amount}", indent=2)
+        return []
 
     log("OK", f"AdsJoy invoice {invoice_number} | Client: {client} | {currency} {amount}", indent=2)
 
@@ -413,8 +715,8 @@ def parse_apple_pdf(pdf_path, text, tables, tracker_df=None):
         invoice_number = first_match(r"Invoice\s*Number\s*[:\s]*([A-Z0-9]+)", text) or "UNKNOWN"
 
     if invoice_exists(tracker_df, invoice_number):
-        log("SKIP", f"Apple invoice {invoice_number} already in tracker", indent=2)
-        return None
+        log("SKIP", f"Apple invoice {invoice_number} already exists", indent=2)
+        return []
 
     client = first_match([
         r"Client\s*[:\s]+([A-Z]{2,6})\b",
@@ -422,13 +724,11 @@ def parse_apple_pdf(pdf_path, text, tables, tracker_df=None):
         r"Description\s*[:\s]*\(S\)[^\n]+\s+([A-Z]{2,6})\s*$",
     ], text, flags=re.I | re.MULTILINE).upper()
 
-    if client in ("NAME", "AND", "ADDRESS", "NUMBER", "ID", "THE", ""):
+    if client in {"NAME", "AND", "ADDRESS", "NUMBER", "ID", "THE", ""}:
         client = "UNKNOWN"
 
     month = extract_month_from_text_or_filename(text, fname)
-    currency = first_match(r"Currency\s*[:\s]*(USD|SGD|MYR|IDR|AUD|GBP|PHP)", text).upper()
-    currency = currency or extract_currency(text, "USD")
-
+    currency = first_match(r"Currency\s*[:\s]*(USD|SGD|MYR|IDR|AUD|GBP|PHP)", text).upper() or extract_currency(text, "USD")
     market = first_match(r"\b(SG|MY|ID|TH|PH|MX|AU|GB|US)\b", text).upper()
 
     amount = clean_amount(first_match([
@@ -448,7 +748,11 @@ def parse_apple_pdf(pdf_path, text, tables, tracker_df=None):
     market = enriched.get("market", market)
     month = enriched.get("month", month)
     currency = enriched.get("currency", currency)
-    amount = clean_amount(enriched.get("amount")) if amount is None else amount
+    amount = amount if amount is not None else clean_amount(enriched.get("amount"))
+
+    if not is_reasonable_amount(amount, currency):
+        log("SKIP", f"Apple invoice {invoice_number} unreasonable amount: {currency} {amount}", indent=2)
+        return []
 
     log("OK", f"Apple invoice {invoice_number} | Client: {client} | Market: {market} | {currency} {amount}", indent=2)
 
@@ -466,13 +770,11 @@ def parse_apple_pdf(pdf_path, text, tables, tracker_df=None):
 def parse_google_pdf(pdf_path, text, tables, tracker_df=None):
     fname = os.path.basename(pdf_path)
 
-    invoice_number = first_match(r"Invoice\s*number[:\s.]*(\d+)", text)
-    if not invoice_number:
-        invoice_number = first_match(r"(\d{10})", fname) or "UNKNOWN"
+    invoice_number = first_match(r"Invoice\s*number[:\s.]*(\d+)", text) or first_match(r"(\d{10})", fname) or "UNKNOWN"
 
     if invoice_exists(tracker_df, invoice_number):
-        log("SKIP", f"Google invoice {invoice_number} already in tracker", indent=2)
-        return None
+        log("SKIP", f"Google invoice {invoice_number} already exists", indent=2)
+        return []
 
     month = extract_month_from_text_or_filename(text, fname)
     currency = extract_currency(text, "USD")
@@ -484,17 +786,12 @@ def parse_google_pdf(pdf_path, text, tables, tracker_df=None):
         client = "UNKNOWN"
 
     amount = clean_amount(first_match([
+        r"Total\s+amount\s+due\s+in\s+[A-Z]{3}\s+[A-Z]{3}\s*([\d,]+\.\d{2})",
         r"Total\s+amount\s+due\s+in\s+[A-Z]{3}\s+[A-Z]{3}\s*([\d,]+)",
+        r"Total\s+in\s+[A-Z]{3}\s+[A-Z]{3}\s*([\d,]+\.\d{2})",
         r"Total\s+in\s+[A-Z]{3}\s+[A-Z]{3}\s*([\d,]+)",
+        r"Amount\s+due\s+[\w\s]*\s+([\d,]+\.\d{2})",
     ], text))
-
-    if amount is None:
-        candidates = [
-            clean_amount(n)
-            for n in re.findall(r"[\d,]{4,}", text)
-            if clean_amount(n) and clean_amount(n) > 1000
-        ]
-        amount = max(candidates) if candidates else None
 
     enriched = enrich_with_gemini(
         {"client": client, "month": month, "currency": currency, "amount": amount},
@@ -506,7 +803,14 @@ def parse_google_pdf(pdf_path, text, tables, tracker_df=None):
     client = enriched.get("client", client)
     month = enriched.get("month", month)
     currency = enriched.get("currency", currency)
-    amount = clean_amount(enriched.get("amount")) if amount is None else amount
+
+    if amount is None:
+        enriched_amount = clean_amount(enriched.get("amount"))
+        amount = enriched_amount if is_reasonable_amount(enriched_amount, currency) else None
+
+    if amount is None or not is_reasonable_amount(amount, currency):
+        log("SKIP", f"Google invoice {invoice_number}: no reliable total amount found", indent=2)
+        return []
 
     log("OK", f"Google invoice {invoice_number} | Client: {client} | {currency} {amount} | {month}", indent=2)
 
@@ -520,30 +824,26 @@ def parse_google_pdf(pdf_path, text, tables, tracker_df=None):
     )]
 
 
-def parse_meta_pdf(pdf_path, text, tables):
+def parse_meta_pdf(pdf_path, text, tables, tracker_df=None):
     invoice_number = first_match(r"Invoice\s*#[:\s]*(\d+)", text)
-
-    billing_period = ""
     period = first_match(r"Billing\s*Period[:\s]*([A-Za-z]{3}-\d{2})", text)
-    if period:
-        billing_period = billing_period_to_str(period)
+    billing_period = billing_period_to_str(period) if period else ""
 
-    currency = first_match(r"Invoice\s*Currency[:\s]*(USD|SGD|MYR|IDR|AUD|GBP)", text).upper()
-    currency = currency or extract_currency(text, "")
+    currency = first_match(r"Invoice\s*Currency[:\s]*(USD|SGD|MYR|IDR|AUD|GBP)", text).upper() or extract_currency(text, "")
 
     client = ""
     market = ""
 
-    campaign_match = re.search(r"MCSP_([A-Z]{2})_([A-Z0-9]+)_", text, re.I)
-    if campaign_match:
-        market = campaign_match.group(1).upper()
-        client = campaign_match.group(2).upper()
+    m = re.search(r"MCSP_([A-Z]{2})_([A-Z0-9]+)_", text, re.I)
+    if m:
+        market = m.group(1).upper()
+        client = m.group(2).upper()
 
     if not client:
-        pac_match = re.search(r"mcspapac_([A-Z]{2})_[A-Z0-9]+_[^_]+_[A-Z]+_([A-Z]{2,6})_", text, re.I)
-        if pac_match:
-            market = market or pac_match.group(1).upper()
-            client = pac_match.group(2).upper()
+        m = re.search(r"mcspapac_([A-Z]{2})_[A-Z0-9]+_[^_]+_[A-Z]+_([A-Z]{2,6})_", text, re.I)
+        if m:
+            market = market or m.group(1).upper()
+            client = m.group(2).upper()
 
     if not market:
         upper_text = text.upper()
@@ -575,49 +875,54 @@ def parse_meta_pdf(pdf_path, text, tables):
     market = enriched.get("market", market)
     billing_period = enriched.get("month", billing_period)
     currency = enriched.get("currency", currency)
-    invoice_total = clean_amount(enriched.get("amount")) if invoice_total is None else invoice_total
+
+    if invoice_total is None:
+        invoice_total = clean_amount(enriched.get("amount"))
 
     rows = []
-    line_pattern = re.compile(r"^\d+\s+(.+?)\s+([\d,]+\.\d{2})\s*$", re.MULTILINE)
 
-    for match in line_pattern.finditer(text):
+    for match in re.finditer(r"^\d+\s+(.+?)\s+([\d,]+\.\d{2})\s*$", text, re.MULTILINE):
         campaign_name = match.group(1).strip()
         amount = clean_amount(match.group(2))
 
-        if re.search(r"subtotal|invoice total|freight|vat|gst", campaign_name, re.I):
+        if (
+            not campaign_name
+            or amount is None
+            or not is_reasonable_amount(amount, currency)
+            or re.search(r"subtotal|invoice total|freight|vat|gst", campaign_name, re.I)
+        ):
             continue
-
-        if amount is None:
-            continue
-
-        campaign_id = first_match(r"<([A-Z0-9]+)>", campaign_name)
 
         rows.append(make_row(
-            "Meta",
+            "Meta (Facebook)",
             month=billing_period,
             client=client,
             market=market,
             invoice_number=invoice_number,
             campaign=campaign_name,
-            campaign_id=campaign_id,
+            campaign_id=first_match(r"<([A-Z0-9]+)>", campaign_name),
             currency=currency,
             amount=amount,
             **{"Ad Account ID": ""},
         ))
 
-    if not rows:
-        rows.append(make_row(
-            "Meta",
-            month=billing_period,
-            client=client,
-            market=market,
-            invoice_number=invoice_number,
-            campaign="",
-            campaign_id="",
-            currency=currency,
-            amount=subtotal or invoice_total,
-            **{"Ad Account ID": ""},
-        ))
+    if not rows and not invoice_exists(tracker_df, invoice_number):
+        fallback_amount = subtotal or invoice_total
+        if is_reasonable_amount(fallback_amount, currency):
+            rows.append(make_row(
+                "Meta (Facebook)",
+                month=billing_period,
+                client=client,
+                market=market,
+                invoice_number=invoice_number,
+                campaign="",
+                campaign_id="",
+                currency=currency,
+                amount=fallback_amount,
+                **{"Ad Account ID": ""},
+            ))
+
+    rows = filter_rows_against_existing(tracker_df, rows, "meta")
 
     log(
         "OK",
@@ -672,10 +977,7 @@ def format_sheet(ws, palette_key, amount_col_names=None):
 
     for ci in range(1, ws.max_column + 1):
         col_letter = get_column_letter(ci)
-        max_len = max(
-            len(str(ws.cell(r, ci).value or ""))
-            for r in range(1, ws.max_row + 1)
-        )
+        max_len = max(len(str(ws.cell(r, ci).value or "")) for r in range(1, ws.max_row + 1))
         ws.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 55)
 
 
@@ -684,12 +986,11 @@ def build_summary(ws, sheet_map):
     thin_border = make_border("E0E0E0")
 
     ws.merge_cells("A1:G1")
-    title = ws["A1"]
-    title.value = "ACCT-108 | Master Invoice Tracker 2026 - Summary"
-    title.font = Font(bold=True, color=DARK, size=13)
-    title.fill = PatternFill("solid", fgColor="F0F4F8")
-    title.alignment = Alignment(horizontal="center", vertical="center")
-    title.border = border
+    ws["A1"] = "ACCT-108 | Master Invoice Tracker 2026 - Summary"
+    ws["A1"].font = Font(bold=True, color=DARK, size=13)
+    ws["A1"].fill = PatternFill("solid", fgColor="F0F4F8")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws["A1"].border = border
     ws.row_dimensions[1].height = 36
 
     headers = ["Currency", "Supplier", "Sheet", "Clients", "# Invoices", "# Campaigns/Rows", "Total Amount"]
@@ -701,32 +1002,37 @@ def build_summary(ws, sheet_map):
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = border
 
-    ws.row_dimensions[2].height = 26
-
     rows = []
 
     for sheet_name, df in sheet_map.items():
         if df.empty:
             continue
 
-        amount_col = next((c for c in ["Amount", "Invoice Total", "Subtotal"] if c in df.columns), None)
-        currency_col = next((c for c in df.columns if c.strip() == "Currency"), None)
+        df = standardize_tracker_sheet(df, sheet_name)
 
-        if not currency_col:
+        if "Amount" not in df.columns or "Currency" not in df.columns:
             continue
 
-        for currency, grp in df.groupby(currency_col):
-            currency = str(currency).strip()
+        df["Amount"] = df["Amount"].apply(clean_amount)
+        df = df[df["Amount"].notna() & df["Currency"].fillna("").astype(str).str.strip().ne("")].copy()
 
-            if not currency:
-                continue
+        if df.empty:
+            continue
 
-            client_col = "Client" if "Client" in grp.columns else None
-            invoice_col = next((c for c in grp.columns if "invoice" in c.lower() and "number" in c.lower()), None)
+        for currency, grp in df.groupby("Currency"):
+            currency = str(currency).strip().upper()
+            invoice_col = get_invoice_col(grp)
 
             clients = "-"
-            if client_col:
-                clients = ", ".join(sorted(grp[client_col].dropna().astype(str).str.strip().unique()))
+            if "Client" in grp.columns:
+                client_values = grp["Client"].dropna().astype(str).str.strip().apply(normalize_client)
+                client_values = sorted([c for c in client_values.unique() if c and c.lower() not in {"nan", "none", "null", "nat"}])
+                clients = ", ".join(client_values) if client_values else "-"
+
+            invoice_count = (
+                grp[invoice_col].astype(str).str.strip().replace("", pd.NA).dropna().nunique()
+                if invoice_col else len(grp)
+            )
 
             rows.append({
                 "currency": currency,
@@ -738,16 +1044,13 @@ def build_summary(ws, sheet_map):
                 }.get(sheet_name, sheet_name),
                 "sheet": sheet_name,
                 "clients": clients,
-                "invoices": grp[invoice_col].nunique() if invoice_col else len(grp),
+                "invoices": invoice_count,
                 "rows": len(grp),
-                "total": grp[amount_col].sum() if amount_col else 0,
+                "total": grp["Amount"].sum(),
             })
 
-    currency_order = ["IDR", "MYR", "SGD", "USD"]
-    rows.sort(key=lambda r: (
-        currency_order.index(r["currency"]) if r["currency"] in currency_order else 99,
-        r["supplier"],
-    ))
+    order = ["IDR", "MYR", "SGD", "USD", "GBP"]
+    rows.sort(key=lambda r: (order.index(r["currency"]) if r["currency"] in order else 99, r["supplier"]))
 
     ri = 3
     last_currency = None
@@ -759,34 +1062,19 @@ def build_summary(ws, sheet_map):
         if currency != last_currency:
             color = CURRENCY_HEADER.get(currency, "333333")
             ws.merge_cells(f"A{ri}:G{ri}")
-
             cell = ws.cell(ri, 1, f"  {currency} - {currency} Invoices")
             cell.fill = PatternFill("solid", fgColor=color)
             cell.font = Font(bold=True, color=WHITE, size=10)
             cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
             cell.border = make_border(color)
-
-            ws.row_dimensions[ri].height = 22
-
             ri += 1
             row_counter = 0
             last_currency = currency
 
         row_counter += 1
-        fill = PatternFill(
-            "solid",
-            fgColor=CURRENCY_COLOURS.get(currency, "F5F5F5") if row_counter % 2 == 0 else WHITE,
-        )
+        fill = PatternFill("solid", fgColor=CURRENCY_COLOURS.get(currency, "F5F5F5") if row_counter % 2 == 0 else WHITE)
 
-        values = [
-            currency,
-            row["supplier"],
-            row["sheet"],
-            row["clients"],
-            row["invoices"],
-            row["rows"],
-            row["total"],
-        ]
+        values = [currency, row["supplier"], row["sheet"], row["clients"], row["invoices"], row["rows"], row["total"]]
 
         for ci, value in enumerate(values, 1):
             cell = ws.cell(ri, ci, value)
@@ -794,11 +1082,9 @@ def build_summary(ws, sheet_map):
             cell.border = thin_border
             cell.alignment = Alignment(vertical="center", wrap_text=False)
             cell.font = Font(color=DARK, size=10, bold=(ci == 7))
-
             if ci == 7:
                 cell.number_format = "#,##0.00"
 
-        ws.row_dimensions[ri].height = 20
         ri += 1
 
     for ci, width in enumerate([10, 18, 18, 38, 13, 18, 18], 1):
@@ -807,7 +1093,35 @@ def build_summary(ws, sheet_map):
     ws.freeze_panes = "A3"
 
 
-def append_new_rows(existing_df, new_rows, key_col):
+def make_dedupe_key(df):
+    if df.empty:
+        return pd.Series(dtype=str)
+
+    invoice_col = get_invoice_col(df)
+    campaign_col = "Campaign" if "Campaign" in df.columns else None
+    amount_col = "Amount" if "Amount" in df.columns else None
+    currency_col = "Currency" if "Currency" in df.columns else None
+
+    def safe(row, col):
+        if not col or col not in row or pd.isna(row[col]):
+            return ""
+        return str(row[col]).strip()
+
+    keys = []
+
+    for _, row in df.iterrows():
+        amt = clean_amount(row.get(amount_col)) if amount_col else None
+        keys.append("|".join([
+            safe(row, invoice_col),
+            safe(row, campaign_col),
+            f"{amt:.2f}" if amt is not None else "",
+            safe(row, currency_col),
+        ]))
+
+    return pd.Series(keys, index=df.index)
+
+
+def append_new_rows(existing_df, new_rows):
     stats = {"added": 0, "duplicates": 0}
 
     if not new_rows:
@@ -817,60 +1131,62 @@ def append_new_rows(existing_df, new_rows, key_col):
 
     if existing_df.empty:
         stats["added"] = len(new_df)
-        return new_df, stats
+        return new_df.reset_index(drop=True), stats
 
-    if key_col not in existing_df.columns or key_col not in new_df.columns:
-        stats["added"] = len(new_df)
-        return pd.concat([existing_df, new_df], ignore_index=True), stats
+    existing_keys = set(make_dedupe_key(existing_df).astype(str))
+    new_keys = make_dedupe_key(new_df).astype(str)
 
-    existing_keys = set(existing_df[key_col].astype(str).str.strip())
-    mask = ~new_df[key_col].astype(str).str.strip().isin(existing_keys)
-    filtered = new_df[mask]
+    filtered = new_df[~new_keys.isin(existing_keys)].copy()
 
     stats["duplicates"] = len(new_df) - len(filtered)
     stats["added"] = len(filtered)
 
-    return pd.concat([existing_df, filtered], ignore_index=True), stats
+    return pd.concat([existing_df, filtered], ignore_index=True).reset_index(drop=True), stats
 
 
 def load_tracker():
     log("LOAD", "Loading tracker from Input/...")
 
     tracker_sheets = pd.read_excel(TRACKER_PATH, sheet_name=None, header=0)
+    tracker = {}
 
-    return {
-        "adsjoy": fix_date_columns(tracker_sheets.get(SHEET_NAMES["adsjoy"], pd.DataFrame())),
-        "apple": fix_date_columns(tracker_sheets.get(SHEET_NAMES["apple"], pd.DataFrame())),
-        "google": fix_date_columns(tracker_sheets.get(SHEET_NAMES["google"], pd.DataFrame())),
-        "meta": fix_date_columns(tracker_sheets.get(SHEET_NAMES["meta"], pd.DataFrame())),
-    }
+    for supplier, sheet_name in SHEET_NAMES.items():
+        tracker[supplier] = standardize_tracker_sheet(
+            tracker_sheets.get(sheet_name, pd.DataFrame()),
+            sheet_name,
+        )
+
+    return tracker
 
 
 def write_tracker(sheet_map):
     log("WRITE", "Writing updated tracker to Output/...")
 
+    cleaned_sheet_map = {
+        sheet_name: standardize_tracker_sheet(df, sheet_name)
+        for sheet_name, df in sheet_map.items()
+    }
+
     with pd.ExcelWriter(OUTPUT_PATH, engine="openpyxl") as writer:
         pd.DataFrame().to_excel(writer, sheet_name="Summary", index=False)
 
-        for sheet_name, df in sheet_map.items():
+        for sheet_name, df in cleaned_sheet_map.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
     log("FORMAT", "Applying workbook formatting...")
 
     wb = load_workbook(OUTPUT_PATH)
 
-    format_config = {
+    for sheet_name, config in {
         "Adsjoy": ("adsjoy", ["Amount"]),
         "Apple (ASA)": ("apple", ["Amount"]),
         "Google": ("google", ["Amount"]),
         "Meta (facebook)": ("meta", ["Amount"]),
-    }
-
-    for sheet_name, config in format_config.items():
+    }.items():
         if sheet_name in wb.sheetnames:
             format_sheet(wb[sheet_name], config[0], amount_col_names=config[1])
 
-    build_summary(wb["Summary"], sheet_map)
+    build_summary(wb["Summary"], cleaned_sheet_map)
 
     if "Summary" in wb.sheetnames:
         wb.move_sheet("Summary", offset=-(len(wb.sheetnames) - 1))
@@ -897,7 +1213,7 @@ def print_extraction_summary(stats, output_path, elapsed):
     print()
     print(f"Output file           : {output_path}")
     print(f"Duration              : {duration_str(elapsed)}")
-    print(f"Result                : SUCCESS")
+    print("Result                : SUCCESS")
     print(SUB_SEP)
 
 
@@ -916,13 +1232,7 @@ def main():
         sys.exit(1)
 
     tracker = load_tracker()
-
-    new_rows = {
-        "adsjoy": [],
-        "apple": [],
-        "google": [],
-        "meta": [],
-    }
+    new_rows = {supplier: [] for supplier in SHEET_NAMES}
 
     stats = {
         "pdfs_scanned": 0,
@@ -931,11 +1241,16 @@ def main():
         "rows_added": 0,
         "duplicates": 0,
         "suppliers": {
-            "adsjoy": {"pdfs": 0, "rows": 0, "added": 0, "duplicates": 0},
-            "apple": {"pdfs": 0, "rows": 0, "added": 0, "duplicates": 0},
-            "google": {"pdfs": 0, "rows": 0, "added": 0, "duplicates": 0},
-            "meta": {"pdfs": 0, "rows": 0, "added": 0, "duplicates": 0},
+            supplier: {"pdfs": 0, "rows": 0, "added": 0, "duplicates": 0}
+            for supplier in SHEET_NAMES
         },
+    }
+
+    parsers = {
+        "adsjoy": parse_adsjoy_pdf,
+        "apple": parse_apple_pdf,
+        "google": parse_google_pdf,
+        "meta": parse_meta_pdf,
     }
 
     invoices = scan_invoices(INVOICE_FOLDER)
@@ -957,16 +1272,8 @@ def main():
         stats["suppliers"][supplier]["pdfs"] += 1
 
         try:
-            if supplier == "adsjoy":
-                result = parse_adsjoy_pdf(pdf_path, text, tables)
-            elif supplier == "apple":
-                result = parse_apple_pdf(pdf_path, text, tables, tracker["apple"])
-            elif supplier == "google":
-                result = parse_google_pdf(pdf_path, text, tables, tracker["google"])
-            elif supplier == "meta":
-                result = parse_meta_pdf(pdf_path, text, tables)
-            else:
-                result = None
+            result = parsers[supplier](pdf_path, text, tables, tracker[supplier])
+            result = filter_rows_against_existing(tracker[supplier], result, supplier)
 
             if result:
                 new_rows[supplier].extend(result)
@@ -982,25 +1289,15 @@ def main():
     sheet_map = {}
 
     for supplier, sheet_name in SHEET_NAMES.items():
-        merged_df, merge_stats = append_new_rows(
-            tracker[supplier],
-            new_rows[supplier],
-            "Invoice number",
-        )
-
-        sheet_map[sheet_name] = merged_df
+        merged_df, merge_stats = append_new_rows(tracker[supplier], new_rows[supplier])
+        sheet_map[sheet_name] = standardize_tracker_sheet(merged_df, sheet_name)
 
         stats["rows_added"] += merge_stats["added"]
         stats["duplicates"] += merge_stats["duplicates"]
         stats["suppliers"][supplier]["added"] = merge_stats["added"]
         stats["suppliers"][supplier]["duplicates"] = merge_stats["duplicates"]
 
-        label = SUPPLIER_LABELS[supplier]
-        log(
-            "MERGE",
-            f"{label}: {merge_stats['added']} added, {merge_stats['duplicates']} duplicate(s) skipped",
-            indent=2,
-        )
+        log("MERGE", f"{SUPPLIER_LABELS[supplier]}: {merge_stats['added']} added, {merge_stats['duplicates']} duplicate(s) skipped", indent=2)
 
     write_tracker(sheet_map)
 
